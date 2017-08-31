@@ -1,204 +1,161 @@
 "use strict";
 
 module.exports = {
-    parse: function(source_str){
-        let file_stat = {
-            content: source_str,
-            name: "main",
-            pos: 0,
-            line: 0,
-            column: 0
-        };
-
-        let binding = function(pos){
-            this.pos = pos;
-            this._arr = [];
-            this._set = {};
-            this.next = null;
-            this.add = function(value, symbol){
-                if(null == symbol)this._arr.push(value);
-                else this._set[symbol] = value;
-            }
-            return this;
-        };
-
-        let expr = function(pos, type){
-            this.pos = pos;
-            this.value = null;
-            this.type = "type";
-            this.binding = null;
-            return this;
-        };
-
-        let lexer_basic = {
-            _char_table : {
-                "{" : 0,
-                "}" : 0,
-                "[" : 0,
-                "]" : 0,
-                "(" : 0,
-                ")" : 0,
-                "'" : "'", // char
-                "\"" : "\"", // string
-                ":" : 0,
-                "," : 0,
-                "." : ".", // special 3
-                "+" : "+", // special 4
-                "-" : "-", // special 5
-                "*" : 1,
-                "/" : 1,
-                "=" : 1,
-                "<" : "<", // special 6
-                ">" : 8, // special 7
-                "%" : 9, // comment
-            },
-            _regex_skipblank: /\S|\r\n?|\n\r?/g,
-            _regex_symbol: /[^\{\}\[\]\(\)'":,\.\+\-\*\/\=<>%\s]+\{?/y,
-            _regex_char: /(?:\\(?:[^uU]|[uU][0-9a-fA-F]{0,4})|[^\\'\r\n])(?=')/y,
-            _regex_string: /\\(?:[^uU]|[uU][0-9a-fA-F]{0,4})|(?:[^\\"\r\n])*(?:\r\n?|\n\r?|\\|(?="))/y,
-            _regex_numeral: /0x[\da-f]+|(?:0|[1-9]\d*)(?:\.\d*)?(?:e[\+\-]?\d+)?/iy,
-            _regex_dot: /\.(?:\.\.|\d+(?:e[\+\-]?\d+)?)?/iy,
-            _regex_plus: /\+(?:0x[\da-f]+|(?:0|[1-9]\d*)(?:\.\d*)?(?:e[\+\-]?\d+)?|\.\d+(?:e[\+\-]?\d+)?)?/iy,
-            _regex_minus: /\-(?:>|0x[\da-f]+|(?:0|[1-9]\d*)(?:\.\d*)?(?:e[\+\-]?\d+)?|\.\d+(?:e[\+\-]?\d+)?)?/iy,
-            _regex_lt: /<[\=\->]?/y,
-            _regex_gt: />\=?/y,
-            _regex_comment_line: /\r\n?|\n\r?/g,
-            _regex_comment_block: /%%|\r\n?|\n\r?/g,
-            _parse_escapechar: function(str){
-                let table = {
-                    "'" : "'",
-                    "\"" : "\"",
-                    "\\" : "\\",
-                    "/" : "/",
-                    "b" : "\b",
-                    "f" : "\f",
-                    "n" : "\n",
-                    "r" : "\r",
-                    "t" : "\t"
-                };
-
-                let char = str[1].toLowerCase();
-                if("u" == char){
-                    if(str.length <= 2)return undefined;
-                    let codepoint = 0;
-                    for(let i=2; i < str.length; i++){
-                        let digit;
-                        if(str[i] >= '0' && str[i] <= '9')digit = str[i] - '0';
-                        else if(str[i] >= 'a' && str[i] <= 'f')digit = str[i] - 'a' + 10;
-                        else if(str[i] >= 'A' && str[i] <= 'F')digit = str[i] - 'A' + 10;
-                        else return undefined;
-
-                        codepoint = codepoint * 16 + digit;
-                    }
-                    return String.fromCodePoint(codepoint);
-                }
-                else return table[char];
-            },
-            get_next: function(input){
-                while(true){
-                    this._regex_skipblank.lastIndex = input.pos;
-                    let result = this._regex_skipblank.exec(input.content);
-                    if(null == result)return null;
-                    else{
-                        if("\r" == result[0][0] || "\n" == result[0][0]){
-                            input.line++;
-                            input.column = 0;
-                            input.pos = result.index + result[0].length;
+    expr: function(pos, type, value){
+        this.pos = pos;
+        this.value = value;
+        this.type = type;
+        this.binding = null;
+        return this;
+    },
+    reserved_word: {
+        "$now" : true,
+        "$this" : true,
+        "$args" : true
+    },
+    parsers: {
+        main: {
+            lexer: {
+                _char_table : {
+                    "{" : 0,
+                    "}" : 0,
+                    "[" : 0,
+                    "]" : 0,
+                    "(" : 0,
+                    ")" : 0,
+                    "'" : "'", // char
+                    "\"" : "\"", // string
+                    ":" : 0,
+                    "," : 0,
+                    "." : ".", // special 3
+                    "+" : "+", // special 4
+                    "-" : "-", // special 5
+                    "*" : 1,
+                    "/" : 1,
+                    "=" : 1,
+                    "<" : "<", // special 6
+                    ">" : 8, // special 7
+                    "%" : 9, // comment
+                },
+                _regex_skipblank: /\S|\r\n?|\n\r?/g,
+                _regex_symbol: /[^\{\}\[\]\(\)'":,\.\+\-\*\/\=<>%\s]+\{?/y,
+                _regex_char: /(?:\\(?:[^uU]|[uU][0-9a-fA-F]{0,4})|[^\\'\r\n])(?=')/y,
+                _regex_string: /\\(?:[^uU]|[uU][0-9a-fA-F]{0,4})|(?:[^\\"\r\n])*(?:\r\n?|\n\r?|\\|(?="))/y,
+                _regex_numeral: /0x[\da-f]+|(?:0|[1-9]\d*)(?:\.\d*)?(?:e[\+\-]?\d+)?/iy,
+                _regex_dot: /\.(?:\.\.|\d+(?:e[\+\-]?\d+)?)?/iy,
+                _regex_plus: /\+(?:0x[\da-f]+|(?:0|[1-9]\d*)(?:\.\d*)?(?:e[\+\-]?\d+)?|\.\d+(?:e[\+\-]?\d+)?)?/iy,
+                _regex_minus: /\-(?:>|0x[\da-f]+|(?:0|[1-9]\d*)(?:\.\d*)?(?:e[\+\-]?\d+)?|\.\d+(?:e[\+\-]?\d+)?)?/iy,
+                _regex_lt: /<[\=\->]?/y,
+                _regex_gt: />\=?/y,
+                _regex_comment_line: /\r\n?|\n\r?/g,
+                _regex_comment_block: /%%|\r\n?|\n\r?/g,
+                _parse_escapechar: function(str){
+                    let table = {
+                        "'" : "'",
+                        "\"" : "\"",
+                        "\\" : "\\",
+                        "/" : "/",
+                        "b" : "\b",
+                        "f" : "\f",
+                        "n" : "\n",
+                        "r" : "\r",
+                        "t" : "\t"
+                    };
+    
+                    let char = str[1].toLowerCase();
+                    if("u" == char){
+                        if(str.length <= 2)return undefined;
+                        let codepoint = 0;
+                        for(let i=2; i < str.length; i++){
+                            let digit;
+                            if(str[i] >= '0' && str[i] <= '9')digit = str[i] - '0';
+                            else if(str[i] >= 'a' && str[i] <= 'f')digit = str[i] - 'a' + 10;
+                            else if(str[i] >= 'A' && str[i] <= 'F')digit = str[i] - 'A' + 10;
+                            else return undefined;
+    
+                            codepoint = codepoint * 16 + digit;
                         }
+                        return String.fromCodePoint(codepoint);
+                    }
+                    else return table[char];
+                },
+                get_next: function(input){
+                    while(true){
+                        this._regex_skipblank.lastIndex = input.pos;
+                        let result = this._regex_skipblank.exec(input.content);
+                        if(null == result)return null;
                         else{
-                            input.column += result.index - input.pos;
-                            input.pos = result.index;
-                            if("0" <= result[0][0] && "9" >= result[0][0]){
-                                // number literal
-                                let symbol = {
-                                    content: null,
-                                    pos: [input.line, input.column],
-                                    type: null,
-                                };
-
-                                this._regex_numeral.lastIndex = input.pos;
-                                symbol.content = this._regex_numeral.exec(input.content)[0];
-                                input.column += symbol.content.length;
-                                input.pos += symbol.content.length;
-
-                                if(-1 != symbol.content.search(/[\.eE]/)){
-                                    symbol.type = "float";
-                                    symbol.content = parseFloat(symbol.content);
-                                }
-                                else{
-                                    symbol.type = "int";
-                                    symbol.content = parseInt(symbol.content);
-                                }
-                                return symbol;
+                            if("\r" == result[0][0] || "\n" == result[0][0]){
+                                input.line++;
+                                input.column = 0;
+                                input.pos = result.index + result[0].length;
                             }
                             else{
-                                let state = this._char_table[result[0][0]];
-                                let symbol = {
-                                    content: null,
-                                    pos: [input.line, input.column],
-                                    type: null
-                                };
-                                
-                                switch(state){
-                                case undefined:
-                                    this._regex_symbol.lastIndex = input.pos;
-                                    symbol.content = this._regex_symbol.exec(input.content)[0];
+                                input.column += result.index - input.pos;
+                                input.pos = result.index;
+                                if("0" <= result[0][0] && "9" >= result[0][0]){
+                                    // number literal
+                                    let symbol = {
+                                        content: null,
+                                        pos: [input.line, input.column],
+                                        type: null,
+                                    };
+    
+                                    this._regex_numeral.lastIndex = input.pos;
+                                    symbol.content = this._regex_numeral.exec(input.content)[0];
                                     input.column += symbol.content.length;
                                     input.pos += symbol.content.length;
-
-                                    if("{" == symbol.content[symbol.content.length - 1]){
-                                        symbol.type = "lexcall";
-                                        symbol.content = symbol.content.substring(0, symbol.content.length - 1);
-                                    }
-                                    else symbol.type = "symbol";
-                                
-                                    return symbol;
-                                case 0:
-                                    symbol.content = result[0][0];
-                                    symbol.type = "";
-                                    input.column += 1;
-                                    input.pos += 1;
-                                    return symbol;
-                                case 1:
-                                    symbol.content = result[0][0];
-                                    symbol.type = "symbol";
-                                    input.column += 1;
-                                    input.pos += 1;
-                                    return symbol;
-                                case "'":
-                                    // char literal
-                                    this._regex_char.lastIndex = input.pos + 1;
-                                    result = this._regex_char.exec(input.content);
-                                    if(null == result){
-                                        symbol.content = 0; // illigal char literal
-                                        symbol.type = "error";
-                                        return symbol;
+    
+                                    if(-1 != symbol.content.search(/[\.eE]/)){
+                                        symbol.type = "float";
+                                        symbol.content = parseFloat(symbol.content);
                                     }
                                     else{
-                                        if("\\" == result[0][0]){
-                                            let char = this._parse_escapechar(result[0]);
-                                            if(undefined == char){
-                                                symbol.pos = [input.line, result.index];
-                                                symbol.content = 2; // illigal escape character
-                                                symbol.type = "error";
-                                                return symbol;
-                                            }
-                                            else symbol.content = char;
-                                        }
-                                        else symbol.content = result[0];
+                                        symbol.type = "int";
+                                        symbol.content = parseInt(symbol.content);
                                     }
-                                    symbol.type = "char";
-                                    input.column += result[0].length + 2;
-                                    input.pos += result[0].length + 2;
                                     return symbol;
-                                case "\"":
-                                    // string literal
-                                    symbol.content = "";
-                                    this._regex_string.lastIndex = input.pos + 1;
-                                    while(true){
-                                        result = this._regex_string.exec(input.content);
+                                }
+                                else{
+                                    let state = this._char_table[result[0][0]];
+                                    let symbol = {
+                                        content: null,
+                                        pos: [input.line, input.column],
+                                        type: null
+                                    };
+                                    
+                                    switch(state){
+                                    case undefined:
+                                        this._regex_symbol.lastIndex = input.pos;
+                                        symbol.content = this._regex_symbol.exec(input.content)[0];
+                                        input.column += symbol.content.length;
+                                        input.pos += symbol.content.length;
+    
+                                        if("{" == symbol.content[symbol.content.length - 1]){
+                                            symbol.type = "lexcall";
+                                            symbol.content = symbol.content.substring(0, symbol.content.length - 1);
+                                        }
+                                        else symbol.type = "symbol";
+                                    
+                                        return symbol;
+                                    case 0:
+                                        symbol.content = result[0][0];
+                                        symbol.type = "";
+                                        input.column += 1;
+                                        input.pos += 1;
+                                        return symbol;
+                                    case 1:
+                                        symbol.content = result[0][0];
+                                        symbol.type = "symbol";
+                                        input.column += 1;
+                                        input.pos += 1;
+                                        return symbol;
+                                    case "'":
+                                        // char literal, considered as int
+                                        this._regex_char.lastIndex = input.pos + 1;
+                                        result = this._regex_char.exec(input.content);
                                         if(null == result){
-                                            symbol.content = 1; // illigal string literal
+                                            symbol.content = 1; // illigal char literal
                                             symbol.type = "error";
                                             return symbol;
                                         }
@@ -207,235 +164,819 @@ module.exports = {
                                                 let char = this._parse_escapechar(result[0]);
                                                 if(undefined == char){
                                                     symbol.pos = [input.line, result.index];
-                                                    symbol.content = 2; // illigal escape character
+                                                    symbol.content = 3; // illigal escape character
                                                     symbol.type = "error";
                                                     return symbol;
                                                 }
-                                                else{
-                                                    symbol.content += char;
-                                                    input.column += result.index + result[0].length - input.pos;
-                                                    input.pos = result.index + result[0].length;
-                                                }
+                                                else symbol.content = char.codePointAt(0);
                                             }
-                                            else if(result[0].length > 0 && ("\r" == result[0][result[0].length - 1] || "\n" == result[0][result[0].length - 1])){
-                                                symbol.content += result[0];
-                                                input.line++;
-                                                input.column = 0;
-                                                input.pos = result.index + result[0].length;
-                                            }
-                                            else if(result[0].length > 0 && "\\" == result[0][result[0].length - 1]){
-                                                symbol.content += result[0].substring(0, result[0].length - 1);
-                                                input.column += result.index + result[0].length - 1 - input.pos;
-                                                input.pos = result.index + result[0].length - 1;
-                                                this._regex_string.lastIndex = input.pos;
-                                            }
-                                            else{
-                                                symbol.content += result[0];
-                                                symbol.type = "string";
-                                                input.column += result.index + result[0].length + 1 - input.pos;
-                                                input.pos = result.index + result[0].length + 1;
+                                            else symbol.content = result[0].codePointAt(0);
+                                        }
+                                        symbol.type = "int";
+                                        input.column += result[0].length + 2;
+                                        input.pos += result[0].length + 2;
+                                        return symbol;
+                                    case "\"":
+                                        // string literal
+                                        symbol.content = "";
+                                        this._regex_string.lastIndex = input.pos + 1;
+                                        while(true){
+                                            result = this._regex_string.exec(input.content);
+                                            if(null == result){
+                                                symbol.content = 2; // illigal string literal
+                                                symbol.type = "error";
                                                 return symbol;
                                             }
-                                        }
-                                    }
-                                case ".":
-                                    this._regex_dot.lastIndex = input.pos;
-                                    symbol.content = this._regex_dot.exec(input.content)[0];
-                                    input.column += symbol.content.length;
-                                    input.pos += symbol.content.length;
-                                    if(-1 == symbol.content.search(/\d/))symbol.type = "";
-                                    else{
-                                        symbol.type = "float";
-                                        symbol.content = parseFloat(symbol.content);
-                                    }
-                                    return symbol;
-                                case "+":
-                                    this._regex_plus.lastIndex = input.pos;
-                                    symbol.content = this._regex_plus.exec(input.content)[0];
-                                    input.column += symbol.content.length;
-                                    input.pos += symbol.content.length;
-                                    if(-1 == symbol.content.search(/\d/))symbol.type = "symbol";
-                                    else if(-1 != symbol.content.search(/[\.eE]/)){
-                                        symbol.type = "float";
-                                        symbol.content = parseFloat(symbol.content);
-                                    }
-                                    else{
-                                        symbol.type = "int";
-                                        symbol.content = parseInt(symbol.content);
-                                    }
-                                    return symbol;
-                                case "-":
-                                    this._regex_minus.lastIndex = input.pos;
-                                    symbol.content = this._regex_minus.exec(input.content)[0];
-                                    input.column += symbol.content.length;
-                                    input.pos += symbol.content.length;
-                                    if(-1 == symbol.content.search(/\d/))symbol.type = "symbol";
-                                    else if(-1 != symbol.content.search(/[\.eE]/)){
-                                        symbol.type = "float";
-                                        symbol.content = parseFloat(symbol.content);
-                                    }
-                                    else{
-                                        symbol.type = "int";
-                                        symbol.content = parseInt(symbol.content);
-                                    }
-                                    return symbol;
-                                case "<":
-                                    this._regex_lt.lastIndex = input.pos;
-                                    symbol.content = this._regex_lt.exec(input.content)[0];
-                                    symbol.type = "symbol";
-                                    input.column += symbol.content.length;
-                                    input.pos += symbol.content.length;
-                                    return symbol;
-                                case ">":
-                                    this._regex_gt.lastIndex = input.pos;
-                                    symbol.content = this._regex_gt.exec(input.content)[0];
-                                    symbol.type = "symbol";
-                                    input.column += symbol.content.length;
-                                    input.pos += symbol.content.length;
-                                    return symbol;
-                                case "%":
-                                    // comment
-                                    if(input.content.length > input.pos + 1 && "%" == input.content[input.pos + 1]){
-                                        // block comment
-                                        this._regex_comment_block.lastIndex = input.pos + 2;
-                                        while(true){
-                                            result = this._regex_comment_block.exec(input.content);
-                                            if(null == result)return null;
-                                            else if("%%" == result[0]){
-                                                input.column += result.index + result[0].length - input.pos;
-                                                input.pos = result.index + result[0].length;
-                                                break;
+                                            else{
+                                                if("\\" == result[0][0]){
+                                                    let char = this._parse_escapechar(result[0]);
+                                                    if(undefined == char){
+                                                        symbol.pos = [input.line, result.index];
+                                                        symbol.content = 3; // illigal escape character
+                                                        symbol.type = "error";
+                                                        return symbol;
+                                                    }
+                                                    else{
+                                                        symbol.content += char;
+                                                        input.column += result.index + result[0].length - input.pos;
+                                                        input.pos = result.index + result[0].length;
+                                                    }
+                                                }
+                                                else if(result[0].length > 0 && ("\r" == result[0][result[0].length - 1] || "\n" == result[0][result[0].length - 1])){
+                                                    symbol.content += result[0];
+                                                    input.line++;
+                                                    input.column = 0;
+                                                    input.pos = result.index + result[0].length;
+                                                }
+                                                else if(result[0].length > 0 && "\\" == result[0][result[0].length - 1]){
+                                                    symbol.content += result[0].substring(0, result[0].length - 1);
+                                                    input.column += result.index + result[0].length - 1 - input.pos;
+                                                    input.pos = result.index + result[0].length - 1;
+                                                    this._regex_string.lastIndex = input.pos;
+                                                }
+                                                else{
+                                                    symbol.content += result[0];
+                                                    symbol.type = "string";
+                                                    input.column += result.index + result[0].length + 1 - input.pos;
+                                                    input.pos = result.index + result[0].length + 1;
+                                                    return symbol;
+                                                }
                                             }
+                                        }
+                                    case ".":
+                                        this._regex_dot.lastIndex = input.pos;
+                                        symbol.content = this._regex_dot.exec(input.content)[0];
+                                        input.column += symbol.content.length;
+                                        input.pos += symbol.content.length;
+                                        if(-1 == symbol.content.search(/\d/))symbol.type = "";
+                                        else{
+                                            symbol.type = "float";
+                                            symbol.content = parseFloat(symbol.content);
+                                        }
+                                        return symbol;
+                                    case "+":
+                                        this._regex_plus.lastIndex = input.pos;
+                                        symbol.content = this._regex_plus.exec(input.content)[0];
+                                        input.column += symbol.content.length;
+                                        input.pos += symbol.content.length;
+                                        if(-1 == symbol.content.search(/\d/))symbol.type = "symbol";
+                                        else if(-1 != symbol.content.search(/[\.eE]/)){
+                                            symbol.type = "float";
+                                            symbol.content = parseFloat(symbol.content);
+                                        }
+                                        else{
+                                            symbol.type = "int";
+                                            symbol.content = parseInt(symbol.content);
+                                        }
+                                        return symbol;
+                                    case "-":
+                                        this._regex_minus.lastIndex = input.pos;
+                                        symbol.content = this._regex_minus.exec(input.content)[0];
+                                        input.column += symbol.content.length;
+                                        input.pos += symbol.content.length;
+                                        if("->" == symbol.content)symbol.type = "";
+                                        else if(-1 == symbol.content.search(/\d/))symbol.type = "symbol";
+                                        else if(-1 != symbol.content.search(/[\.eE]/)){
+                                            symbol.type = "float";
+                                            symbol.content = parseFloat(symbol.content);
+                                        }
+                                        else{
+                                            symbol.type = "int";
+                                            symbol.content = parseInt(symbol.content);
+                                        }
+                                        return symbol;
+                                    case "<":
+                                        this._regex_lt.lastIndex = input.pos;
+                                        symbol.content = this._regex_lt.exec(input.content)[0];
+                                        if("<-" == symbol.content)symbol.type = ""; else symbol.type = "symbol";
+                                        input.column += symbol.content.length;
+                                        input.pos += symbol.content.length;
+                                        return symbol;
+                                    case ">":
+                                        this._regex_gt.lastIndex = input.pos;
+                                        symbol.content = this._regex_gt.exec(input.content)[0];
+                                        symbol.type = "symbol";
+                                        input.column += symbol.content.length;
+                                        input.pos += symbol.content.length;
+                                        return symbol;
+                                    case "%":
+                                        // comment
+                                        if(input.content.length > input.pos + 1 && "%" == input.content[input.pos + 1]){
+                                            // block comment
+                                            this._regex_comment_block.lastIndex = input.pos + 2;
+                                            while(true){
+                                                result = this._regex_comment_block.exec(input.content);
+                                                if(null == result)return null;
+                                                else if("%%" == result[0]){
+                                                    input.column += result.index + result[0].length - input.pos;
+                                                    input.pos = result.index + result[0].length;
+                                                    break;
+                                                }
+                                                else{
+                                                    input.line++;
+                                                    input.column = 0;
+                                                    input.pos = result.index + result[0].length;
+                                                    this._regex_comment_block.lastIndex = input.pos;
+                                                }
+                                            }
+                                        }
+                                        else{
+                                            // line comment
+                                            this._regex_comment_line.lastIndex = input.pos + 1;
+                                            result = this._regex_comment_line.exec(input.content);
+                                            if(null == result)return null;
                                             else{
                                                 input.line++;
                                                 input.column = 0;
                                                 input.pos = result.index + result[0].length;
-                                                this._regex_comment_block.lastIndex = input.pos;
                                             }
                                         }
+                                        break;
+                                    default:
+                                        symbol.content = result[0][0];
+                                        input.column += result[0].length;
+                                        input.pos += result[0].length;
+                                        return symbol;
                                     }
-                                    else{
-                                        // line comment
-                                        this._regex_comment_line.lastIndex = input.pos + 1;
-                                        result = this._regex_comment_line.exec(input.content);
-                                        if(null == result)return null;
-                                        else{
-                                            input.line++;
-                                            input.column = 0;
-                                            input.pos = result.index + result[0].length;
-                                        }
-                                    }
-                                    break;
-                                default:
-                                    symbol.content = result[0][0];
-                                    input.column += result[0].length;
-                                    input.pos += result[0].length;
-                                    return symbol;
                                 }
                             }
                         }
                     }
                 }
-            }
-        };
-
-        let parser = {
-            reserved_word: {
-                "now" : true,
-                "here" : true
             },
-            parse: function(file_stat){
-                let RetValue = "";
+            parse: function(file_stat, compiler){
+                let error = null;
                 let stack = [];
-                let cur_item = new expr([0, 0], "");
-                let popstack = function(){
-                    let cmd = stack.pop();
-                    let pushed_item = cmd.opd1;
-                    switch(cmd.name){
-                        case "set":
-                        pushed_item.value = cur_expr;
-                        break;
-                        case "bind":
-                        pushed_item.add(cmd.op2, cur_expr);
-                        break;
-                        case "addbind_L":
-                        pushed_item.add();
-                        case "addbind_R":
-                        pushed_item.add();
-                        break;
+                let stat = {op:"eb", head_item: null, cur_item: null, lexeme_stack:[]};
+
+                let add_item = function(pos, type, value, dir){
+                    let new_item = new compiler.expr(pos, type, value);
+
+                    if(null == dir && "dir" in stat)dir = stat.dir;
+                    if(null != dir){
+                        if(true == dir)stat.cur_item.binding = new_item;
+                        else{
+                            new_item.binding = stat.cur_item;
+                            stat.head_item = new_item;
+                        }
                     }
-                    cur_item = pushed_item;
+                    else if(null == stat.head_item)stat.head_item = new_item;
+                    stat.cur_item = new_item;
                 }
+                let expand_shortbind = function(){
+                    let temp_head = stat.head_item;
+                    popstack();
+                    let new_pack = new compiler.expr(stat.cur_item.pos, stat.cur_item.type, stat.cur_item.value);
+                    new_pack.binding = temp_head;
+                    stat.cur_item.type = "mexp";
+                    stat.cur_item.value = new_pack;
+                }
+                let pushstack = function(){
+                    stack.push(stat);
+                    stat = {op:"eb", head_item: null, cur_item: null, lexeme_stack:[]};
+                }
+                let popstack = function(){
+                    let prev_stat = stack.pop();
+                    switch(prev_stat.op_stack){
+                        case "block":
+                        prev_stat.cur_item.value.expr = stat.head_item;
+                        break;
 
-                let stat = "eb";
-                while(true){
-                    let lexeme = lexer_basic.get_next(file_stat);
-                    if(null == lexeme)break;
-                    else if("error" == lexeme.type){
-                        RetValue += lexeme.type + ": " + lexeme.content + " [" + lexeme.pos[0] + ", "+lexeme.pos[1] + "]\n";
+                        case "pack":
+                        if("op_id" in prev_stat)prev_stat.cur_item.value._map.set(prev_stat.op_id, stat.head_item);
+                        else prev_stat.cur_item.value._arr.push(stat.head_item);
+                        delete prev_stat.op_id;
+                        break;
+                    }
+                    delete prev_stat.op_stack;
+                    stat = prev_stat;
+                }
+                
+                while(null == error){
+                    let lexeme;
+                    if(stat.lexeme_stack.length > 0)lexeme = stat.lexeme_stack.pop();
+                    else lexeme = this.lexer.get_next(file_stat);
+                    if(null != lexeme && "error" == lexeme.type){
+                        error = {id:lexeme.content, pos:lexeme.pos};
                         break;
                     }
 
-                    switch(stat){
-                        case "eb": // expr begin
-                        if("" == lexeme.type){
+                    switch(stat.op){
+                        case "eb": // element begin
+                        if(null == lexeme){
+                            error = {id:0x100, pos:[file_stat.line, file_stat.column]}; // empty expression.
+                        }
+                        else if("" == lexeme.type){
                             if("(" == lexeme.content){
-                                // push stack
-                                stat = "bb"; // binding begin
+                                add_item(lexeme.pos, "pack", {_arr:[], _map:new Map()});
+                                stat.op = "pb"; // pack begin
                             }
                             else if("{" == lexeme.content){
-                                // push stack
-                                stat = "bcb"; // binding capture begin
+                                add_item(lexeme.pos, "block", {param:[], param_tail_list:null, expr:null});
+                                stat.op = "bcb"; // block capture definition begin
                             }
                             else if("[" == lexeme.content){
-                                // push stack
-                                stat = "ab"; // array begin
+                                add_item(lexeme.pos, "index", null);
+                                stat.op = "ib"; // index begin
                             }
                             else{
-                                // error
+                                error = {id:0x101, pos:lexeme.pos, value:lexeme.content}; // cannot start an element with {lexeme.content}.
                             }
                         }
-                        else if("symbol" == lexeme.content){
-                            stat = "se?"; // symbol possibly end
-                        }
                         else{
-                            stat = "ce?"; // constant possibly end
+                            add_item(lexeme.pos, lexeme.type, lexeme.content);
+                            stat.op = "ee"; // element end
                         }
                         break;
 
-                        case "bb": // binding begin
-                        if("" == lexeme.type){
-                            if(")" == lexeme.content){
-                                // pop stack
-                                stat = "be"; // binding end
-                            }
-                            else if("{" == lexeme.content){
-                                // push stack
-                                stat = "bcb"; // binding capture begin
+                        case "ee": // element end
+                        if(null == lexeme){
+                            if(stack.length > 0 && stack[stack.length - 1].op_stack == "mexp")expand_shortbind();
+                            if(stack.length > 0)error = {id:0x10F, pos:[file_stat.line, file_stat.column]}; // unclosed bracket.
+                            else error = {id:0x0, pos:[file_stat.line, file_stat.column], value:stat.head_item}; // done.
+                        }
+                        else if("" == lexeme.type){
+                            if("(" == lexeme.content){
+                                if(0 == stack.length || stack[stack.length - 1].op_stack != "mexp"){
+                                    stat.op_stack = "mexp";
+                                    pushstack();
+                                }
+                                else stat.dir = true;
+                                add_item(lexeme.pos, "pack", {_arr:[], _map:new Map()});
+                                stat.op = "pb"; // pack begin
                             }
                             else if("[" == lexeme.content){
-                                // push stack
-                                stat = "ab"; // array begin
+                                if(0 == stack.length || stack[stack.length - 1].op_stack != "mexp"){
+                                    stat.op_stack = "mexp";
+                                    pushstack();
+                                }
+                                else stat.dir = true;
+                                add_item(lexeme.pos, "index", null);
+                                stat.op = "ib"; // index begin
+                            }
+                            else if("." == lexeme.content){
+                                if(0 == stack.length || stack[stack.length - 1].op_stack != "mexp"){
+                                    stat.op_stack = "mexp";
+                                    pushstack();
+                                }
+                                else stat.dir = true;
+                                add_item(lexeme.pos, "index", null);
+                                stat.op = "ib_dot"; // index begin
+                            }
+                            else if("," == lexeme.content){
+                                if(stack.length > 0 && stack[stack.length - 1].op_stack == "mexp")expand_shortbind();
+                                if(0 == stack.length || stack[stack.length - 1].op_stack != "pack")error = {id:0x10B, pos:lexeme.pos}; // unexpected comma.
+                                else popstack();
+                            }
+                            else if(")" == lexeme.content){
+                                if(stack.length > 0 && stack[stack.length - 1].op_stack == "mexp")expand_shortbind();
+                                if(0 == stack.length || stack[stack.length - 1].op_stack != "pack")error = {id:0x109, pos:lexeme.pos, value:lexeme.content}; // unexpected bracket.
+                                else{
+                                    popstack();
+                                    stat.lexeme_stack.push(lexeme);
+                                }
+                            }
+                            else if("}" == lexeme.content){
+                                if(stack.length > 0 && stack[stack.length - 1].op_stack == "mexp")expand_shortbind();
+                                if(0 == stack.length || stack[stack.length - 1].op_stack != "block")error = {id:0x109, pos:lexeme.pos, value:lexeme.content}; // unexpected bracket.
+                                else popstack();
+                            }
+                            else if("->" == lexeme.content){
+                                if(stack.length > 0 && stack[stack.length - 1].op_stack == "mexp")expand_shortbind();
+                                if("dir" in stat && stat.dir != true)error = {id:0x102, pos:lexeme.pos}; // the binding direction must be the same in an expression.
+                                else{
+                                    stat.dir = true;
+                                    stat.op = "eb"; // element begin
+                                }
+                            }
+                            else if("<-" == lexeme.content){
+                                if(stack.length > 0 && stack[stack.length - 1].op_stack == "mexp")expand_shortbind();
+                                if("dir" in stat && stat.dir != false)error = {id:0x102, pos:lexeme.pos}; // the binding direction must be the same in an expression.
+                                else{
+                                    stat.dir = false;
+                                    stat.op = "eb"; // element begin
+                                }
                             }
                             else{
-                                // error
+                                error = {id:0x103, pos:lexeme.pos, value:lexeme.content}; // cannot have {lexeme.content} after an constant.
                             }
                         }
-                        else if("symbol" == lexeme.content){
-                            stat = "se?"; // symbol possibly end
+                        else {
+                            error = {id:0x104, pos:lexeme.pos}; // a constant cannot appear right after another one.
+                        }
+                        break;
+
+                        case "bcb": // block capture definition begin
+                        if(null == lexeme){
+                            error = {id:0x105, pos:[file_stat.line, file_stat.column]}; // unexpected file end.
+                        }
+                        else if("" == lexeme.type){
+                            if(":" == lexeme.content){
+                                stat.op = "ee";
+                                stat.op_stack = "block";
+                                pushstack();
+                            }
+                            else{
+                                error = {id:0x107, pos:lexeme.pos, value:lexeme.content}; // a binding capture definition can only contain symbols separated by commas.
+                            }
+                        }
+                        else if("symbol" == lexeme.type){
+                            if(lexeme.content in compiler.reserved_word)error = {id:0x110, pos:lexeme.pos, value:lexeme.content}; // try to redefine a keyword.
+                            else{
+                                stat.cur_item.value.param.push(lexeme.content);
+                                stat.op = "bce?"; // block capture definition possible end
+                            }
                         }
                         else{
-                            stat = "ce?"; // constant possibly end
+                            error = {id:0x106, pos:lexeme.pos}; // a binding capture definition only accept symbols.
+                        }
+                        break;
+
+                        case "bce?": // block capture definition possible end
+                        if(null == lexeme){
+                            error = {id:0x105, pos:[file_stat.line, file_stat.column]}; // unexpected file end.
+                        }
+                        else if("" == lexeme.type){
+                            if("," == lexeme.content){
+                                stat.op = "bcb"; // block capture definition begin
+                            }
+                            else if("..." == lexeme.content){
+                                stat.cur_item.value.param_tail_list = stat.cur_item.value.param.pop();
+                                stat.op = "bce"; // block capture definition end
+                            }
+                            else if(":" == lexeme.content){
+                                stat.op = "ee";
+                                stat.op_stack = "block";
+                                pushstack();
+                            }
+                            else{
+                                error = {id:0x107, pos:lexeme.pos, value:lexeme.content}; // a binding capture definition can only contain symbols separated by commas.
+                            }
+                        }
+                        else{
+                            error = {id:0x107, pos:lexeme.pos}; // a binding capture definition can only contain symbols separated by commas.
+                        }
+                        break;
+
+                        case "bce": // block capture definition possible end
+                        if(null == lexeme){
+                            error = {id:0x105, pos:[file_stat.line, file_stat.column]}; // unexpected file end.
+                        }
+                        else if("" == lexeme.type){
+                            if(":" == lexeme.content){
+                                stat.op = "ee"; // element end
+                                stat.op_stack = "block";
+                                pushstack();
+                            }
+                            else{
+                                error = {id:0x108, pos:lexeme.pos}; // a binding capture definition must end after "..." .
+                            }
+                        }
+                        else{
+                            error = {id:0x108, pos:lexeme.pos}; // a binding capture definition must end after "..." .
+                        }
+                        break;
+
+                        case "pb": // pack begin
+                        if(null == lexeme){
+                            error = {id:0x105, pos:[file_stat.line, file_stat.column]}; // unexpected file end.
+                        }
+                        else if("" == lexeme.type){
+                            if(")" == lexeme.content){
+                                stat.op = "ee"; // element end
+                            }
+                            else{
+                                stat.op = "pb"; // pack begin
+                                stat.op_stack = "pack";
+                                pushstack();
+                                stat.lexeme_stack.push(lexeme);
+                            }
+                        }
+                        else if("symbol" == lexeme.type){
+                            let lexeme_next;
+                            if(stat.lexeme_stack.length > 0)lexeme_next = stat.lexeme_stack.pop();
+                            else lexeme_next = this.lexer.get_next(file_stat);
+                            if(null == lexeme){
+                                error = {id:0x105, pos:[file_stat.line, file_stat.column]}; // unexpected file end.
+                            }
+                            else if("error" == lexeme_next.type){
+                                error = {id:lexeme_next.content, pos:lexeme_next.pos};
+                            }
+                            else if("" == lexeme_next.type && ":" == lexeme_next.content){
+                                if(lexeme.content in compiler.reserved_word)error = {id:0x10A, pos:lexeme.pos, value:lexeme.content}; // try to redefine a keyword.
+                                else{
+                                    stat.op = "pb"; // pack begin
+                                    stat.op_stack = "pack";
+                                    stat.op_id = lexeme.content;
+                                    pushstack();
+                                }
+                            }
+                            else{
+                                stat.op = "pb"; // pack begin
+                                stat.op_stack = "pack";
+                                pushstack();
+                                stat.lexeme_stack.push(lexeme_next);
+                                stat.lexeme_stack.push(lexeme);
+                            }
+                        }
+                        else{
+                            stat.op = "pb"; // pack begin
+                            stat.op_stack = "pack";
+                            pushstack();
+                            stat.lexeme_stack.push(lexeme);
+                        }
+                        break;
+
+                        case "ib": // index begin
+                        if(null == lexeme){
+                            error = {id:0x105, pos:[file_stat.line, file_stat.column]}; // unexpected file end.
+                        }
+                        else if("symbol" == lexeme.type){
+                            stat.cur_item.value = lexeme.content;
+                            stat.op = "ie"; // index end
+                        }
+                        else if("int" == lexeme.type){
+                            stat.cur_item.value = lexeme.content;
+                            stat.op = "ie"; // index end
+                        }
+                        else{
+                            error = {id:0x10C, pos:lexeme.pos}; // an index must be expressed with an integer or a symbol.
+                        }
+                        break;
+
+                        case "ib_dot": // index begin
+                        if(null == lexeme){
+                            error = {id:0x105, pos:[file_stat.line, file_stat.column]}; // unexpected file end.
+                        }
+                        else if("symbol" == lexeme.type){
+                            stat.cur_item.value = lexeme.content;
+                            stat.op = "ee"; // index end
+                        }
+                        else{
+                            error = {id:0x10E, pos:lexeme.pos}; // an dot-form index can only be a symbol index.
+                        }
+                        break;
+
+                        case "ie": // index end
+                        if(null == lexeme){
+                            error = {id:0x105, pos:[file_stat.line, file_stat.column]}; // unexpected file end.
+                        }
+                        else if("" == lexeme.type){
+                            if("]" == lexeme.content){
+                                stat.op = "ee"; // element end
+                            }
+                            else{
+                                error = {id:0x10D, pos:lexeme.pos}; // an index must end with a "]".
+                            }
+                        }
+                        else{
+                            error = {id:0x10D, pos:lexeme.pos}; // an index must end with a "]".
                         }
                         break;
                     }
-                    
-                    //else if("string" == lexeme.type)RetValue += lexeme.type + ": \"" + lexeme.content + "\" [" + lexeme.pos[0] + ", "+lexeme.pos[1] + "]\n";
-                    //else if("char" == lexeme.type)RetValue += lexeme.type + ": \'" + lexeme.content + "\' [" + lexeme.pos[0] + ", "+lexeme.pos[1] + "]\n";
-                    //else RetValue += lexeme.type + ": " + lexeme.content + " [" + lexeme.pos[0] + ", "+lexeme.pos[1] + "]\n";
+                }
+                return error;
+            }
+        }
+    },
+    parse: function(source_str){
+        let file_stat = {
+            content: source_str,
+            name: "main",
+            pos: 0,
+            line: 0,
+            column: 0
+        };
+        return this.parsers.main.parse(file_stat, this);
+    },
+    toString: function(expr, mexp = false){
+        let result = "";
+        while(true){
+            if(expr.type == "error"){
+                result += `${expr.value}@[${expr.pos[0]},${expr.pos[1]}]`;
+            }
+            else if(expr.type == "index"){
+                result += "[" + expr.value.toString() + "]";
+            }
+            else if(expr.type == "mexp"){
+                let cur_expr = expr.value;
+                result += this.toString(cur_expr, true);
+            }
+            else if(expr.type == "block"){
+                result += "{";
+                if("function" == typeof(expr.value)){
+                    result += ":delegate{...}"
+                }
+                else{
+                    let not_first = false;
+                    for(let item of expr.value.param){
+                        if(not_first)result += ",";
+                        result += item;
+                        not_first = true;
+                    }
+                    if(expr.value.param_tail_list){
+                        if(not_first)result += ",";
+                        result += expr.value.param_tail_list + "...";
+                    }
+                    result += ":";
+                    result += this.toString(expr.value.expr);
+                }
+                result += "}";
+            }
+            else if(expr.type == "pack"){
+                result += "(";
+                let not_first = false;
+                for(let item of expr.value._arr){
+                    if(not_first)result += ",";
+                    result += this.toString(item);
+                    not_first = true;
+                }
+                for(let [key, value] of expr.value._map){
+                    if(not_first)result += ",";
+                    result += key + ":";
+                    result += this.toString(value);
+                    not_first = true;
+                }
+                result += ")";
+            }
+            else if(expr.type == "string"){
+                result += "\"" + expr.value.toString().replace("\"","\"") + "\"";
+            }
+            else{
+                result += expr.value.toString();
+            }
+            if(null != expr.binding){
+                expr = expr.binding;
+                if(!mexp)result += "->";
+            }
+            else break;
+        }
+        return result;
+    },
+    global_fn : {
+
+    },
+    add_global_fn: function(name, fn, param_decl){
+        global_fn[name] = fn;
+    },
+    eval: function(expr){
+        let fn_now = function(expr){
+            if(("index" != expr.type && "symbol" != expr.type) || "string" != typeof(expr.value))return new this.env.expr(expr.pos, "error", 0x200); // a scope can only resolve a string-type index.
+            let scope = this;
+            do{
+                if(expr.value in scope.vars)return scope.vars[expr.value];
+                scope = scope.prev;
+            }while(undefined != scope);
+            return new this.env.expr(expr.pos, "error", 0x201); // cannot resolve the given index.
+        };
+        
+        let cc = {
+            env: this,
+            scope: {
+                vars: {$now: new this.expr([0,0], "block", fn_now)}
+            },
+            stack: [],
+            op1: null,
+            op2: null
+        }
+        cc.scope.vars.$now.value.scope = cc.scope;
+
+        for(name in this.global_fn)cc.scope.vars[name] = this.expr([0,0], "block", this.global_fn[name]);
+
+        let call = function(compiler){
+            if("block" == cc.op1.type){
+                if("pack" != cc.op2.type)cc.op2 = new compiler.expr(cc.op2.pos, "pack", {_arr:[cc.op2],_map:new Map()});
+                if("function" == typeof(cc.op1.value)){
+                    // js function delegate
+                    if(cc.op1.value.isGenerator){
+
+                    }
+                    else{
+                        if(fn_now == cc.op1.value)cc.op1 = cc.op1.value.apply(cc.op1.value.scope, cc.op2.value._arr);
+                        else cc.op1 = cc.op1.value.apply(cc, cc.op2.value._arr);
+                    }
+                    return false;
+                }
+                else{
+                    let scope_new = {vars:{}, prev:cc.op1.value.scope};
+                    // bind names
+                    let name_count = cc.op1.value.param.length;
+                    if(cc.op2.value._arr.length < name_count)name_count = cc.op2.value._arr.length;
+                    for(let i=0;i<name_count;i++)scope_new.vars[cc.op1.value.param[i]] = cc.op2.value._arr[i];
+                    for(let [key, val] of cc.op2.value._map)scope_new.vars[key] = val;
+                    if(null != cc.op1.value.param_tail_list){
+                        if(cc.op2.value._arr.length < cc.op1.value.param.length)scope_new.vars[cc.op1.value.param_tail_list] = new compiler.expr(cc.op2.pos, "pack", {_arr:[],_map:new Map()});
+                        else scope_new.vars[cc.op1.value.param_tail_list] = new compiler.expr(cc.op2.pos, "pack", {_arr:cc.op2.value._arr.slice(cc.op1.value.param.length),_map:new Map()});
+                    }
+                    scope_new.vars.$this = cc.op1;
+                    scope_new.vars.$args = cc.op2;
+                    scope_new.vars.$now = new compiler.expr([0,0], "block", fn_now);
+                    scope_new.vars.$now.value.scope = scope_new;
+
+                    cc.stack.push({op:"call", expr:expr, scope:cc.scope});
+                    expr = cc.op1.value.expr;
+                    cc.op1 = null;
+                    cc.op2 = null;
+                    cc.scope = scope_new;
+                    return true;
                 }
             }
+            else{
+                // value type. default binding capture
+                let param = null;
+                if("pack" == cc.op2.type){
+                    if(cc.op2.value._arr.length > 0)param = cc.op2.value._arr[0];
+                }
+                else param = cc.op2;
+
+                if(null != param){
+                    if("string" == cc.op1.type){
+                        if("index" != param.type || "number" != typeof(param.value))cc.op1 = new compiler.expr(cc.op1.pos, "error", 0x202); // a string can only accept an int-type index.
+                        else if(expr.value < 0 || expr.value >= expr.length)cc.op1 = new compiler.expr(cc.op1.pos, "error", 0x203);  // the index exceeds string index range.
+                        else cc.op1 = new compiler.expr(cc.op1.pos, "int", cc.op1.value.codePointAt(param.value));
+                    }
+                    else if("pack" == cc.op1.type){
+                        if("index" != param.type)cc.op1 = new compiler.expr(cc.op1.pos, "error", 0x204); // a pack can only accept an index.
+                        else{
+                            if("number" == typeof(param.value)){
+                                if(param.value < 0 || param.value >= cc.op1.value._arr.length)cc.op1 = new compiler.expr(cc.op1.pos, "error", 0x205);  // the index exceeds pack index range.
+                                else cc.op1 = cc.op1.value._arr[param.value];
+                            }
+                            else{
+                                if(cc.op1.value._map.has(param.value))cc.op1 = cc.op1.value._map.get(param.value);
+                                else cc.op1 = new compiler.expr(cc.op1.pos, "error", 0x206);  // the required element is not found.
+                            }
+                        }
+                    }
+                    else{
+                        cc.op1 = new compiler.expr(cc.op1.pos, "error", 0x207); // a constant cannot accept any parameter.
+                    }
+                }
+                cc.op2 = null;
+                return false;
+            }
+        }
+
+        let call_pack = function(pack){
+            let index = null, jmp_dest = null;
+            if(pack.value._arr.length > 0){
+                index = 0;
+                jmp_dest = pack.value._arr[index];
+            }
+            else if(pack.value._map.size > 0){
+                index = pack.value._map[Symbol.iterator]();
+                let next_val = index.next();
+                index = [next_val.value[0], index];
+                jmp_dest = next_val.value[1];
+            }
+            if(null == index){
+                cc.expr = expr;
+                expr = null;
+            }
+            else{
+                cc.stack.push({op1:cc.op1, op2:cc.op2, op3:pack, op:"pack", expr:expr, index:index});
+                cc.op1 = null;
+                cc.op2 = null;
+                expr = jmp_dest;
+            }
         };
-        return RetValue;
+
+        let call_mexp = function(mexp){
+            cc.stack.push({op1:cc.op1, op:"mexp", expr:expr});
+            cc.op1 = null;
+            cc.op2 = null;
+            expr = mexp.value;
+        };
+
+        let ret = function(){
+            if(0 == cc.stack.length)return true;
+            else{
+                let stack_frame = cc.stack.pop();
+
+                if("pack" == stack_frame.op){
+                    let index = null;
+                    if("number" == typeof(stack_frame.index)){
+                        stack_frame.op2.value._arr.push(cc.op1);
+                        if(stack_frame.op3.value._arr.length > stack_frame.index + 1){
+                            index = stack_frame.index + 1;
+                            expr = stack_frame.op3.value._arr[index];
+                        }
+                        else if(stack_frame.op3.value._map.size > 0){
+                            index = stack_frame.op3.value._map[Symbol.iterator]();
+                            let next_val = index.next();
+                            index = [next_val.value[0], index];
+                            expr = next_val.value[1];
+                        }
+                        else expr = null;
+                    }
+                    else{
+                        stack_frame.op2.value._map.set(stack_frame.index[0], cc.op1);
+                        let next_val = stack_frame.index[1].next();
+                        if(!next_val.done){
+                            index = [next_val.value[0], stack_frame.index[1]];
+                            expr = next_val.value[1];
+                        }
+                        else expr = null;
+                    }
+
+                    if(null != index){
+                        stack_frame.index = index;
+                        cc.stack.push(stack_frame);
+                        cc.op1 = null;
+                        cc.op2 = null;
+                        return false;
+                    }
+                }
+                else if("call" == stack_frame.op){
+                    cc.op2 = cc.op1;
+                    cc.op1 = null;
+                    cc.expr = stack_frame.expr;
+                    cc.scope = stack_frame.scope;
+                    expr = null;
+                    return false;
+                }
+                else if("mexp" == stack_frame.op){
+                    cc.op2 = cc.op1;
+                    cc.op1 = stack_frame.op1;
+                    cc.expr = stack_frame.expr;
+                    expr = null;
+                    return false;
+                }
+
+                cc.op1 = stack_frame.op1;
+                cc.op2 = stack_frame.op2;
+                cc.expr = stack_frame.expr;
+                if("scope" in stack_frame)cc.scope = stack_frame.scope;
+                expr = null;
+                return false;
+            }
+        }
+
+        while(true){
+            // preprocess the current var
+            if(null == expr){
+                expr = cc.expr;
+                delete cc.expr;
+            }
+            else{
+                if("block" == expr.type){
+                    // add scope info
+                    cc.op2 = new this.expr(expr.pos, expr.type);
+                    cc.op2.value = {param:expr.value.param, param_tail_list:expr.value.param_tail_list, expr:expr.value.expr, scope:cc.scope};
+                }
+                else if("pack" == expr.type){
+                    cc.op2 = new this.expr(expr.pos, expr.type);
+                    cc.op2.value = {_arr:[], _map:new Map()};
+                    call_pack(expr);
+                    continue;
+                }
+                else if("mexp" == expr.type){
+                    call_mexp(expr);
+                    continue;
+                }
+                else if("symbol" == expr.type){
+                    cc.op2 = fn_now.apply(cc.scope, [expr]);
+                }
+                else{
+                    cc.op2 = new this.expr(expr.pos, expr.type, expr.value);
+                }
+            }
+
+            if(null != cc.op1){
+                if(call(this))continue;
+            }
+            else{
+                cc.op1 = cc.op2;
+                cc.op2 = null;
+            }
+
+            if(null != expr.binding){
+                expr = expr.binding;
+                continue;
+            }
+            else{
+                if(ret())return cc.op1;
+            }
+        }
     }
 }

@@ -20,7 +20,7 @@
                 "-i",
                 "test"
             ],
-            "console": "internalConsole",
+            "console": "integratedTerminal",
             "sourceMaps": false
         },
         {
@@ -39,7 +39,7 @@
             "env": {
                 "NODE_ENV": "development"
             },
-            "console": "internalConsole",
+            "console": "integratedTerminal",
             "sourceMaps": false
         },
         {
