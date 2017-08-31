@@ -734,20 +734,62 @@ module.exports = {
         return result;
     },
     global_fn : {
-
+        int: function(expr){
+            if("int" == expr.type)return expr;
+            else if("float" == expr.type)return new this.env.expr([0,0], "int", Math.floor(expr.value));
+            else if("string" == expr.type){
+                let int = parseInt(expr.value);
+                return new this.env.expr([0,0], "int", int);
+            }
+            else return new this.env.expr([0,0], "error", 0x208); // operation failed.
+        },
+        float: function(expr){
+            if("float" == expr.type)return expr;
+            else if("int" == expr.type)return new this.env.expr([0,0], "float", expr.value);
+            else if("string" == expr.type){
+                let float = parseFloat(expr.value);
+                return new this.env.expr([0,0], "float", float);
+            }
+            else return new this.env.expr([0,0], "error", 0x208); // operation failed.
+        },
+        string: function(expr){
+            return new this.env.expr([0,0], "string", this.env.toString(expr));
+        },
+        "+": function(a, b){
+            if("int" == a.type && "int" == b.type)return new this.env.expr([0,0], "int", a.value + b.value);
+            else if(("int" == a.type || "float" == a.type) && ("int" == b.type || "float" == b.type))return new this.env.expr([0,0], "float", a.value + b.value);
+            else if("string" == a.type && "string" == b.type)return new this.env.expr([0,0], "string", a.value + b.value);
+            else return new this.env.expr([0,0], "error", 0x208); // operation failed.
+        },
+        "-": function(a, b){
+            if("int" == a.type && "int" == b.type)return new this.env.expr([0,0], "int", a.value - b.value);
+            else if(("int" == a.type || "float" == a.type) && ("int" == b.type || "float" == b.type))return new this.env.expr([0,0], "float", a.value - b.value);
+            else return new this.env.expr([0,0], "error", 0x208); // operation failed.
+        },
+        "*": function(a, b){
+            if("int" == a.type && "int" == b.type)return new this.env.expr([0,0], "int", a.value * b.value);
+            else if(("int" == a.type || "float" == a.type) && ("int" == b.type || "float" == b.type))return new this.env.expr([0,0], "float", a.value * b.value);
+            else return new this.env.expr([0,0], "error", 0x208); // operation failed.
+        },
+        "/": function(a, b){
+            if("int" == a.type && "int" == b.type)return new this.env.expr([0,0], "int", Math.floor(a.value / b.value));
+            else if(("int" == a.type || "float" == a.type) && ("int" == b.type || "float" == b.type))return new this.env.expr([0,0], "float", a.value / b.value);
+            else return new this.env.expr([0,0], "error", 0x208); // operation failed.
+        }
     },
     add_global_fn: function(name, fn, param_decl){
         global_fn[name] = fn;
     },
     eval: function(expr){
+        let compiler = this;
         let fn_now = function(expr){
-            if(("index" != expr.type && "symbol" != expr.type) || "string" != typeof(expr.value))return new this.env.expr(expr.pos, "error", 0x200); // a scope can only resolve a string-type index.
+            if(("index" != expr.type && "symbol" != expr.type) || "string" != typeof(expr.value))return new compiler.expr(expr.pos, "error", 0x200); // a scope can only resolve a string-type index.
             let scope = this;
             do{
                 if(expr.value in scope.vars)return scope.vars[expr.value];
                 scope = scope.prev;
             }while(undefined != scope);
-            return new this.env.expr(expr.pos, "error", 0x201); // cannot resolve the given index.
+            return new compiler.expr(expr.pos, "error", 0x201); // cannot resolve the given index.
         };
         
         let cc = {
@@ -761,19 +803,22 @@ module.exports = {
         }
         cc.scope.vars.$now.value.scope = cc.scope;
 
-        for(name in this.global_fn)cc.scope.vars[name] = this.expr([0,0], "block", this.global_fn[name]);
+        for(let name in this.global_fn)cc.scope.vars[name] = new this.expr([0,0], "block", this.global_fn[name]);
 
-        let call = function(compiler){
+        let call = function(){
             if("block" == cc.op1.type){
                 if("pack" != cc.op2.type)cc.op2 = new compiler.expr(cc.op2.pos, "pack", {_arr:[cc.op2],_map:new Map()});
                 if("function" == typeof(cc.op1.value)){
                     // js function delegate
-                    if(cc.op1.value.isGenerator){
+                    if(fn_now == cc.op1.value)cc.op1 = cc.op1.value.apply(cc.op1.value.scope, cc.op2.value._arr);
+                    else cc.op1 = cc.op1.value.apply(cc, cc.op2.value._arr);
+                    if(cc.op1.constructor != compiler.expr){
+                        // then it must be a generator function.
+                        let result = cc.op1.next();
+                        if(result.done)cc.op1 = result.value;
+                        else{
 
-                    }
-                    else{
-                        if(fn_now == cc.op1.value)cc.op1 = cc.op1.value.apply(cc.op1.value.scope, cc.op2.value._arr);
-                        else cc.op1 = cc.op1.value.apply(cc, cc.op2.value._arr);
+                        }
                     }
                     return false;
                 }
@@ -963,7 +1008,7 @@ module.exports = {
             }
 
             if(null != cc.op1){
-                if(call(this))continue;
+                if(call())continue;
             }
             else{
                 cc.op1 = cc.op2;
