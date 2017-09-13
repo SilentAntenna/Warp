@@ -34,8 +34,8 @@ module.exports = {
                     "/" : 1,
                     "=" : 1,
                     "<" : "<", // special 6
-                    ">" : 8, // special 7
-                    "%" : 9, // comment
+                    ">" : ">", // special 7
+                    "%" : "%", // comment
                 },
                 _regex_skipblank: /\S|\r\n?|\n\r?/g,
                 _regex_symbol: /[^\{\}\[\]\(\)'":,\.\+\-\*\/\=<>%\s]+\{?/y,
@@ -734,7 +734,7 @@ module.exports = {
         return result;
     },
     global_fn : {
-        int: function(expr){
+        "int": function(expr){
             if("int" == expr.type)return expr;
             else if("float" == expr.type)return new this.env.expr([0,0], "int", Math.floor(expr.value));
             else if("string" == expr.type){
@@ -743,7 +743,7 @@ module.exports = {
             }
             else return new this.env.expr([0,0], "error", 0x208); // operation failed.
         },
-        float: function(expr){
+        "float": function(expr){
             if("float" == expr.type)return expr;
             else if("int" == expr.type)return new this.env.expr([0,0], "float", expr.value);
             else if("string" == expr.type){
@@ -752,8 +752,30 @@ module.exports = {
             }
             else return new this.env.expr([0,0], "error", 0x208); // operation failed.
         },
-        string: function(expr){
-            return new this.env.expr([0,0], "string", this.env.toString(expr));
+        "string": function(expr){
+            if("string" == expr.type)return expr;
+            else return new this.env.expr([0,0], "string", this.env.toString(expr));
+        },
+        "if": {
+            fn: function*(cond, expr_then, expr_else){
+                if("bool" == cond.type){
+                    if(false == cond.value){
+                        if("block" == expr_else.type)return yield [expr_else, new this.env.expr([0,0], "pack", {_arr:[],_map:new Map()})];
+                        else return expr_else;
+                    }
+                    else{
+                        if("block" == expr_then.type)return yield [expr_then, new this.env.expr([0,0], "pack", {_arr:[],_map:new Map()})];
+                        else return expr_then;
+                    }
+                }
+                else return new this.env.expr([0,0], "error", 0x208); // operation failed.
+            },
+            param_decl: [null, "then", "else"]
+        },
+        "=": function(a, b){
+            if(a.type != b.type)return new this.env.expr([0,0], "bool", false);
+            else if("int" == a.type || "float" == a.type || "bool" == a.type || "string" == b.type || "index" == b.type)return new this.env.expr([0,0], "bool", a.value === b.value);
+            else return new this.env.expr([0,0], "bool", false);
         },
         "+": function(a, b){
             if("int" == a.type && "int" == b.type)return new this.env.expr([0,0], "int", a.value + b.value);
@@ -778,7 +800,8 @@ module.exports = {
         }
     },
     add_global_fn: function(name, fn, param_decl){
-        global_fn[name] = fn;
+        if(null != param_decl)global_fn[name] = {"fn":fn, "param_decl":param_decl};
+        else global_fn[name] = fn;
     },
     eval: function(expr){
         let compiler = this;
@@ -795,7 +818,11 @@ module.exports = {
         let cc = {
             env: this,
             scope: {
-                vars: {$now: new this.expr([0,0], "block", fn_now)}
+                vars: {
+                    true: new this.expr([0,0], "bool", true),
+                    false: new this.expr([0,0], "bool", false),
+                    $now: new this.expr([0,0], "block", fn_now),
+                }
             },
             stack: [],
             op1: null,
@@ -803,7 +830,13 @@ module.exports = {
         }
         cc.scope.vars.$now.value.scope = cc.scope;
 
-        for(let name in this.global_fn)cc.scope.vars[name] = new this.expr([0,0], "block", this.global_fn[name]);
+        for(let name in this.global_fn){
+            if("object" == typeof(this.global_fn[name])){
+                cc.scope.vars[name] = new this.expr([0,0], "block", this.global_fn[name].fn);
+                cc.scope.vars[name].value.param_decl = this.global_fn[name].param_decl;
+            }
+            else cc.scope.vars[name] = new this.expr([0,0], "block", this.global_fn[name]);
+        }
 
         let call = function(){
             if("block" == cc.op1.type){
@@ -811,13 +844,33 @@ module.exports = {
                 if("function" == typeof(cc.op1.value)){
                     // js function delegate
                     if(fn_now == cc.op1.value)cc.op1 = cc.op1.value.apply(cc.op1.value.scope, cc.op2.value._arr);
+                    else if("param_decl" in cc.op1.value){
+                        let arr_tmp = [];
+                        for(let i=0; i<cc.op1.value.param_decl.length; i++){
+                            let param_name = cc.op1.value.param_decl[i];
+                            if(null != param_name)arr_tmp.push(cc.op2.value._map.get(param_name));
+                            else if(i < cc.op2.value._arr.length)arr_tmp.push(cc.op2.value._arr[i]);
+                            else arr_tmp.push(new compiler.expr([0,0], "error", 0x209)); // required parameter is not provided.
+                        }
+                        cc.op1 = cc.op1.value.apply(cc, arr_tmp);
+                    }
+                    else if(cc.op1.value.length > cc.op2.value._arr.length){
+                        let arr_tmp = [];
+                        for(let item of cc.op2.value._arr)arr_tmp.push(item);
+                        for(let i=cc.op2.value._arr.length; i<cc.op1.value.length; i++)arr_tmp.push(new compiler.expr([0,0], "error", 0x209)); // required parameter is not provided.
+                        cc.op1 = cc.op1.value.apply(cc, arr_tmp);
+                    }
                     else cc.op1 = cc.op1.value.apply(cc, cc.op2.value._arr);
                     if(cc.op1.constructor != compiler.expr){
                         // then it must be a generator function.
                         let result = cc.op1.next();
                         if(result.done)cc.op1 = result.value;
                         else{
-
+                            cc.stack.push({op:"call_gen", expr:expr, op1:cc.op1}); // must return a function with scope
+                            expr = result.value[1];
+                            cc.op1 = result.value[0];
+                            cc.op2 = null;
+                            return true;
                         }
                     }
                     return false;
@@ -861,7 +914,7 @@ module.exports = {
                         else cc.op1 = new compiler.expr(cc.op1.pos, "int", cc.op1.value.codePointAt(param.value));
                     }
                     else if("pack" == cc.op1.type){
-                        if("index" != param.type)cc.op1 = new compiler.expr(cc.op1.pos, "error", 0x204); // a pack can only accept an index.
+                        if("index" != param.type && "string" != param.type && "int" != param.type)cc.op1 = new compiler.expr(cc.op1.pos, "error", 0x204); // a pack can only accept an integer, a string or an index.
                         else{
                             if("number" == typeof(param.value)){
                                 if(param.value < 0 || param.value >= cc.op1.value._arr.length)cc.op1 = new compiler.expr(cc.op1.pos, "error", 0x205);  // the index exceeds pack index range.
@@ -959,6 +1012,22 @@ module.exports = {
                     cc.scope = stack_frame.scope;
                     expr = null;
                     return false;
+                }
+                else if("call_gen" == stack_frame.op){
+                    let result = stack_frame.op1.next(cc.op1);
+                    if(result.done){
+                        cc.op2 = cc.op1;
+                        cc.op1 = null;
+                        cc.expr = stack_frame.expr;
+                        expr = null;
+                        return false;
+                    }
+                    else{
+                        cc.stack.push(stack_frame);
+                        expr = result.value[1];
+                        cc.op1 = result.value[0];
+                        cc.op2 = null;
+                    }
                 }
                 else if("mexp" == stack_frame.op){
                     cc.op2 = cc.op1;
