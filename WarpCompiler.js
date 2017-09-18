@@ -11,7 +11,8 @@ module.exports = {
     reserved_word: {
         "$now" : true,
         "$this" : true,
-        "$args" : true
+        "$args" : true,
+        "$proto" : true,
     },
     parsers: {
         main: {
@@ -672,17 +673,17 @@ module.exports = {
     toString: function(expr, mexp = false){
         let result = "";
         while(true){
-            if(expr.type == "error"){
+            if(expr.type == "error" || (expr.type.value && expr.type.value.fn === this.global_fn.error.fn)){
                 result += `${expr.value}@[${expr.pos[0]},${expr.pos[1]}]`;
             }
-            else if(expr.type == "index"){
+            else if(expr.type == "index" || (expr.type.value && expr.type.value.fn === this.global_fn.index.fn)){
                 result += "[" + expr.value.toString() + "]";
             }
             else if(expr.type == "mexp"){
                 let cur_expr = expr.value;
                 result += this.toString(cur_expr, true);
             }
-            else if(expr.type == "block"){
+            else if(expr.type == "block" || (expr.type.value && expr.type.value.fn === this.global_fn.block.fn)){
                 result += "{";
                 if("function" == typeof(expr.value)){
                     result += ":delegate{...}"
@@ -703,7 +704,7 @@ module.exports = {
                 }
                 result += "}";
             }
-            else if(expr.type == "pack"){
+            else if(expr.type == "pack" || (expr.type.value && expr.type.value.fn === this.global_fn.pack.fn)){
                 result += "(";
                 let not_first = false;
                 for(let item of expr.value._arr){
@@ -719,7 +720,7 @@ module.exports = {
                 }
                 result += ")";
             }
-            else if(expr.type == "string"){
+            else if(expr.type == "string" || (expr.type.value && expr.type.value.fn == this.global_fn.string.fn)){
                 result += "\"" + expr.value.toString().replace("\"","\"") + "\"";
             }
             else{
@@ -733,70 +734,178 @@ module.exports = {
         }
         return result;
     },
+    _type_wrapper: function*(type, args){
+        let result = yield [type.value.expr, args];
+        if(result.type != this.root_scope.pack || result.value._map.size > 0 || result.value._arr.length != 2)return new this.env.expr([0,0], this.root_scope.error, 0x208); // operation failed.
+        else return new this.env.expr([0,0], type, result.value._arr);
+    },
+    _def_type_convert: function(type, expr){
+        while(true){
+            if(expr.type === type)return expr;
+            if(expr.type === this.root_scope.block)return null;
+            if("expr" in expr.type.value)expr = expr.value[1];
+            else expr = this.root_scope.fail;
+        }
+    },
     global_fn : {
-        "int": function(expr){
-            if("int" == expr.type)return expr;
-            else if("float" == expr.type)return new this.env.expr([0,0], "int", Math.floor(expr.value));
-            else if("string" == expr.type){
-                let int = parseInt(expr.value);
-                return new this.env.expr([0,0], "int", int);
-            }
-            else return new this.env.expr([0,0], "error", 0x208); // operation failed.
+        // types
+        "block": {
+            fn: function(expr){
+                let def_convert = this.env._def_type_convert.apply(this, [this.root_scope.block, expr]);
+                if(null != def_convert)return def_convert;
+                else return new this.env.expr([0,0], this.root_scope.error, 0x208); // operation failed.
+            },
+            proto: "block"
         },
-        "float": function(expr){
-            if("float" == expr.type)return expr;
-            else if("int" == expr.type)return new this.env.expr([0,0], "float", expr.value);
-            else if("string" == expr.type){
-                let float = parseFloat(expr.value);
-                return new this.env.expr([0,0], "float", float);
-            }
-            else return new this.env.expr([0,0], "error", 0x208); // operation failed.
+        "type": {
+            fn: function(expr, proto){
+                let def_convert = this.env._def_type_convert.apply(this, [this.root_scope.type, expr]);
+                if(null != def_convert)return def_convert;
+                else{
+                    if(this.root_scope.error == proto.type)proto = this.root_scope.block;
+                    if(this.root_scope.block != expr.type || this.root_scope.type != proto.type)return new this.env.expr([0,0], this.root_scope.error, 0x208); // operation failed.
+                    else{
+                        let expr_value_new;
+                        if("function" == typeof(expr.value))expr_value_new = expr.value;
+                        else{
+                            expr_value_new = {};
+                            for(let name in expr.value)expr_value_new[name] = expr.value[name];
+                            let scope_new = {vars:{$proto:proto}, prev:expr_value_new.scope};
+                            expr_value_new.scope = scope_new;
+                        }
+                        return new this.env.expr([0,0], this.root_scope.type, {fn:this.env._type_wrapper, proto:proto, expr:new this.env.expr([0,0], this.root_scope.block, expr_value_new)});
+                    }
+                }
+            },
+            proto: "block",
+            param_decl: [null, "proto"]
         },
-        "string": function(expr){
-            if("string" == expr.type)return expr;
-            else return new this.env.expr([0,0], "string", this.env.toString(expr));
+        "error": {
+            fn: function(expr){
+                let def_convert = this.env._def_type_convert.apply(this, [this.root_scope.error, expr]);
+                if(null != def_convert)return def_convert;
+                else return new this.env.expr([0,0], this.root_scope.error, 0x208); // operation failed.
+            },
+            proto: "block"
+        },
+        "pack": {
+            fn: function(expr){
+                let def_convert = this.env._def_type_convert.apply(this, [this.root_scope.pack, expr]);
+                if(null != def_convert)return def_convert;
+                else return new this.env.expr([0,0], this.root_scope.error, 0x208); // operation failed.
+            },
+            proto: "block"
+        },
+        "int": {
+            fn: function(expr){
+                let def_convert = this.env._def_type_convert.apply(this, [this.root_scope.int, expr]);
+                if(null != def_convert)return def_convert;
+                else if(this.root_scope.float == expr.type)return new this.env.expr([0,0], this.root_scope.int, Math.floor(expr.value));
+                else if(this.root_scope.string == expr.type){
+                    let int = parseInt(expr.value);
+                    return new this.env.expr([0,0], this.root_scope.int, int);
+                }
+                else return new this.env.expr([0,0], this.root_scope.error, 0x208); // operation failed.
+            },
+            proto: "block"
+        },
+        "float": {
+            fn: function(expr){
+                let def_convert = this.env._def_type_convert.apply(this, [this.root_scope.float, expr]);
+                if(null != def_convert)return def_convert;
+                else if(this.root_scope.int == expr.type)return new this.env.expr([0,0], this.root_scope.float, expr.value);
+                else if(this.root_scope.string == expr.type){
+                    let float = parseFloat(expr.value);
+                    return new this.env.expr([0,0], this.root_scope.float, float);
+                }
+                else return new this.env.expr([0,0], this.root_scope.error, 0x208); // operation failed.
+            },
+            proto: "block"
+        },
+        "bool": {
+            fn: function(expr){
+                let def_convert = this.env._def_type_convert.apply(this, [this.root_scope.bool, expr]);
+                if(null != def_convert)return def_convert;
+                else return new this.env.expr([0,0], this.root_scope.error, 0x208); // operation failed.
+            },
+            proto: "block"
+        },
+        "string": {
+            fn: function(expr){
+                let def_convert = this.env._def_type_convert.apply(this, [this.root_scope.string, expr]);
+                if(null != def_convert)return def_convert;
+                else return new this.env.expr([0,0], this.root_scope.string, this.env.toString(expr)); // operation failed.
+            },
+            proto: "block"
+        },
+        "index": {
+            fn: function(expr){
+                let def_convert = this.env._def_type_convert.apply(this, [this.root_scope.index, expr]);
+                if(null != def_convert)return def_convert;
+                else if(this.root_scope.int == expr.type) return new this.env.expr([0,0], this.root_scope.index, expr.value);
+                else return new this.env.expr([0,0], this.root_scope.error, 0x208); // operation failed.
+            },
+            proto: "block"
+        },
+
+        // functions
+        "fail": function(){
+            return new this.env.expr([0,0], this.root_scope.error, 0x208); // operation failed.
         },
         "if": {
             fn: function*(cond, expr_then, expr_else){
-                if("bool" == cond.type){
+                if(this.root_scope.bool == cond.type){
                     if(false == cond.value){
-                        if("block" == expr_else.type)return yield [expr_else, new this.env.expr([0,0], "pack", {_arr:[],_map:new Map()})];
+                        if(this.root_scope.block == expr_else.type)return yield [expr_else, new this.env.expr([0,0], this.root_scope.pack, {_arr:[],_map:new Map()})];
                         else return expr_else;
                     }
                     else{
-                        if("block" == expr_then.type)return yield [expr_then, new this.env.expr([0,0], "pack", {_arr:[],_map:new Map()})];
+                        if(this.root_scope.block == expr_then.type)return yield [expr_then, new this.env.expr([0,0], this.root_scope.pack, {_arr:[],_map:new Map()})];
                         else return expr_then;
                     }
                 }
-                else return new this.env.expr([0,0], "error", 0x208); // operation failed.
+                else return new this.env.expr([0,0], this.root_scope.error, 0x208); // operation failed.
             },
             param_decl: [null, "then", "else"]
         },
+        "typeof": function(expr){ return expr.type; },
+        "is": function(a, b){
+            if(a.type !== b.type || this.root_scope.type !== a.type)return new this.env.expr([0,0], this.root_scope.error, 0x208); // operation failed.
+            else{
+                let cur_type = a;
+                while(true){
+                    if(cur_type === b)return new this.env.expr([0,0], this.root_scope.bool, true);
+                    if(cur_type === cur_type.value.proto)break;
+                    cur_type = cur_type.value.proto;
+                }
+                return new this.env.expr([0,0], this.root_scope.bool, false);
+            }
+        },
         "=": function(a, b){
-            if(a.type != b.type)return new this.env.expr([0,0], "bool", false);
-            else if("int" == a.type || "float" == a.type || "bool" == a.type || "string" == b.type || "index" == b.type)return new this.env.expr([0,0], "bool", a.value === b.value);
-            else return new this.env.expr([0,0], "bool", false);
+            if(a.type !== b.type)return new this.env.expr([0,0], this.root_scope.bool, false);
+            else if(this.root_scope.block === a.type.value.proto)return new this.env.expr([0,0], this.root_scope.bool, a.value === b.value);
+            else return new this.env.expr([0,0], this.root_scope.bool, false);
         },
         "+": function(a, b){
-            if("int" == a.type && "int" == b.type)return new this.env.expr([0,0], "int", a.value + b.value);
-            else if(("int" == a.type || "float" == a.type) && ("int" == b.type || "float" == b.type))return new this.env.expr([0,0], "float", a.value + b.value);
-            else if("string" == a.type && "string" == b.type)return new this.env.expr([0,0], "string", a.value + b.value);
-            else return new this.env.expr([0,0], "error", 0x208); // operation failed.
+            if(this.root_scope.int == a.type && this.root_scope.int == b.type)return new this.env.expr([0,0], this.root_scope.int, a.value + b.value);
+            else if((this.root_scope.int == a.type || this.root_scope.float == a.type) && (this.root_scope.int == b.type || this.root_scope.float == b.type))return new this.env.expr([0,0], this.root_scope.float, a.value + b.value);
+            else if(this.root_scope.string == a.type && this.root_scope.string == b.type)return new this.env.expr([0,0], this.root_scope.string, a.value + b.value);
+            else return new this.env.expr([0,0], this.root_scope.error, 0x208); // operation failed.
         },
         "-": function(a, b){
-            if("int" == a.type && "int" == b.type)return new this.env.expr([0,0], "int", a.value - b.value);
-            else if(("int" == a.type || "float" == a.type) && ("int" == b.type || "float" == b.type))return new this.env.expr([0,0], "float", a.value - b.value);
-            else return new this.env.expr([0,0], "error", 0x208); // operation failed.
+            if(this.root_scope.int == a.type && this.root_scope.int == b.type)return new this.env.expr([0,0], this.root_scope.int, a.value - b.value);
+            else if((this.root_scope.int == a.type || this.root_scope.float == a.type) && (this.root_scope.int == b.type || this.root_scope.float == b.type))return new this.env.expr([0,0], this.root_scope.float, a.value - b.value);
+            else return new this.env.expr([0,0], this.root_scope.error, 0x208); // operation failed.
         },
         "*": function(a, b){
-            if("int" == a.type && "int" == b.type)return new this.env.expr([0,0], "int", a.value * b.value);
-            else if(("int" == a.type || "float" == a.type) && ("int" == b.type || "float" == b.type))return new this.env.expr([0,0], "float", a.value * b.value);
-            else return new this.env.expr([0,0], "error", 0x208); // operation failed.
+            if(this.root_scope.int == a.type && this.root_scope.int == b.type)return new this.env.expr([0,0], this.root_scope.int, a.value * b.value);
+            else if((this.root_scope.int == a.type || this.root_scope.float == a.type) && (this.root_scope.int == b.type || this.root_scope.float == b.type))return new this.env.expr([0,0], this.root_scope.float, a.value * b.value);
+            else return new this.env.expr([0,0], this.root_scope.error, 0x208); // operation failed.
         },
         "/": function(a, b){
-            if("int" == a.type && "int" == b.type)return new this.env.expr([0,0], "int", Math.floor(a.value / b.value));
-            else if(("int" == a.type || "float" == a.type) && ("int" == b.type || "float" == b.type))return new this.env.expr([0,0], "float", a.value / b.value);
-            else return new this.env.expr([0,0], "error", 0x208); // operation failed.
+            if(this.root_scope.int == a.type && this.root_scope.int == b.type)return new this.env.expr([0,0], this.root_scope.int, Math.floor(a.value / b.value));
+            else if((this.root_scope.int == a.type || this.root_scope.float == a.type) && (this.root_scope.int == b.type || this.root_scope.float == b.type))return new this.env.expr([0,0], this.root_scope.float, a.value / b.value);
+            else return new this.env.expr([0,0], this.root_scope.error, 0x208); // operation failed.
         }
     },
     add_global_fn: function(name, fn, param_decl){
@@ -805,62 +914,84 @@ module.exports = {
     },
     eval: function(expr){
         let compiler = this;
+        let cc = {
+            env: this,
+            root_scope: {
+                true: new this.expr([0,0], "bool", true),
+                false: new this.expr([0,0], "bool", false)
+            },
+            scope: {},
+            stack: [],
+            op1: null,
+            op2: null
+        }
+
         let fn_now = function(expr){
-            if(("index" != expr.type && "symbol" != expr.type) || "string" != typeof(expr.value))return new compiler.expr(expr.pos, "error", 0x200); // a scope can only resolve a string-type index.
+            if((cc.root_scope.index != expr.type && "symbol" != expr.type) || "string" != typeof(expr.value))return new compiler.expr(expr.pos, cc.root_scope.error, 0x200); // a scope can only resolve a string-type index.
             let scope = this;
             do{
                 if(expr.value in scope.vars)return scope.vars[expr.value];
                 scope = scope.prev;
             }while(undefined != scope);
-            return new compiler.expr(expr.pos, "error", 0x201); // cannot resolve the given index.
+            return new compiler.expr(expr.pos, cc.root_scope.error, 0x201); // cannot resolve the given index.
         };
-        
-        let cc = {
-            env: this,
-            scope: {
-                vars: {
-                    true: new this.expr([0,0], "bool", true),
-                    false: new this.expr([0,0], "bool", false),
-                    $now: new this.expr([0,0], "block", fn_now),
-                }
-            },
-            stack: [],
-            op1: null,
-            op2: null
-        }
+
+        cc.scope.vars = cc.root_scope;
+        cc.scope.vars.$now = new this.expr([0,0], "block", fn_now);
         cc.scope.vars.$now.value.scope = cc.scope;
 
         for(let name in this.global_fn){
             if("object" == typeof(this.global_fn[name])){
-                cc.scope.vars[name] = new this.expr([0,0], "block", this.global_fn[name].fn);
-                cc.scope.vars[name].value.param_decl = this.global_fn[name].param_decl;
+                let item = this.global_fn[name];
+                if("proto" in item){
+                    cc.root_scope[name] = new this.expr([0,0], "type", {fn:item.fn, proto:item.proto, name:name});
+                    if("param_decl" in item)cc.root_scope[name].value.fn.param_decl = item.param_decl;
+                }
+                else{
+                    cc.root_scope[name] = new this.expr([0,0], "block", item.fn);
+                    cc.root_scope[name].value.param_decl = item.param_decl;
+                }
             }
-            else cc.scope.vars[name] = new this.expr([0,0], "block", this.global_fn[name]);
+            else cc.root_scope[name] = new this.expr([0,0], "block", this.global_fn[name]);
+        }
+
+        // types
+        for(let name in cc.root_scope){
+            if("type" == cc.root_scope[name].type)cc.root_scope[name].value.proto = cc.root_scope[cc.root_scope[name].value.proto];
+            cc.root_scope[name].type = cc.root_scope[cc.root_scope[name].type];
         }
 
         let call = function(){
-            if("block" == cc.op1.type){
-                if("pack" != cc.op2.type)cc.op2 = new compiler.expr(cc.op2.pos, "pack", {_arr:[cc.op2],_map:new Map()});
-                if("function" == typeof(cc.op1.value)){
+            let callee;
+            if("expr" in cc.op1.type.value)callee = cc.op1.value[0]; else callee = cc.op1;
+            if(cc.root_scope.block == callee.type || cc.root_scope.type == callee.type){
+                if(cc.root_scope.pack != cc.op2.type)cc.op2 = new compiler.expr(cc.op2.pos, cc.root_scope.pack, {_arr:[cc.op2],_map:new Map()});
+                
+                let func;
+                if(cc.root_scope.type == callee.type)func = callee.value.fn;
+                else func = callee.value;
+
+                if("function" == typeof(func)){
                     // js function delegate
-                    if(fn_now == cc.op1.value)cc.op1 = cc.op1.value.apply(cc.op1.value.scope, cc.op2.value._arr);
-                    else if("param_decl" in cc.op1.value){
+                    if(fn_now == func)cc.op1 = func.apply(func.scope, cc.op2.value._arr);
+                    else if(compiler._type_wrapper == func)cc.op1 = func.apply(cc, [callee, cc.op2]);
+                    else if("param_decl" in func){
                         let arr_tmp = [];
-                        for(let i=0; i<cc.op1.value.param_decl.length; i++){
-                            let param_name = cc.op1.value.param_decl[i];
+                        for(let i=0; i<func.param_decl.length; i++){
+                            let param_name = func.param_decl[i];
                             if(null != param_name)arr_tmp.push(cc.op2.value._map.get(param_name));
                             else if(i < cc.op2.value._arr.length)arr_tmp.push(cc.op2.value._arr[i]);
-                            else arr_tmp.push(new compiler.expr([0,0], "error", 0x209)); // required parameter is not provided.
+                            else arr_tmp.push(new compiler.expr([0,0], cc.root_scope.error, 0x209)); // required parameter is not provided.
                         }
-                        cc.op1 = cc.op1.value.apply(cc, arr_tmp);
+                        cc.op1 = func.apply(cc, arr_tmp);
                     }
-                    else if(cc.op1.value.length > cc.op2.value._arr.length){
+                    else if(func.length > cc.op2.value._arr.length){
                         let arr_tmp = [];
                         for(let item of cc.op2.value._arr)arr_tmp.push(item);
-                        for(let i=cc.op2.value._arr.length; i<cc.op1.value.length; i++)arr_tmp.push(new compiler.expr([0,0], "error", 0x209)); // required parameter is not provided.
-                        cc.op1 = cc.op1.value.apply(cc, arr_tmp);
+                        for(let i=cc.op2.value._arr.length; i<func.length; i++)arr_tmp.push(new compiler.expr([0,0], cc.root_scope.error, 0x209)); // required parameter is not provided.
+                        cc.op1 = func.apply(cc, arr_tmp);
                     }
-                    else cc.op1 = cc.op1.value.apply(cc, cc.op2.value._arr);
+                    else cc.op1 = func.apply(cc, cc.op2.value._arr);
                     if(cc.op1.constructor != compiler.expr){
                         // then it must be a generator function.
                         let result = cc.op1.next();
@@ -876,23 +1007,22 @@ module.exports = {
                     return false;
                 }
                 else{
-                    let scope_new = {vars:{}, prev:cc.op1.value.scope};
+                    let scope_new = {vars:{}, prev:func.scope};
                     // bind names
-                    let name_count = cc.op1.value.param.length;
+                    let name_count = func.param.length;
                     if(cc.op2.value._arr.length < name_count)name_count = cc.op2.value._arr.length;
-                    for(let i=0;i<name_count;i++)scope_new.vars[cc.op1.value.param[i]] = cc.op2.value._arr[i];
+                    for(let i=0;i<name_count;i++)scope_new.vars[func.param[i]] = cc.op2.value._arr[i];
                     for(let [key, val] of cc.op2.value._map)scope_new.vars[key] = val;
-                    if(null != cc.op1.value.param_tail_list){
-                        if(cc.op2.value._arr.length < cc.op1.value.param.length)scope_new.vars[cc.op1.value.param_tail_list] = new compiler.expr(cc.op2.pos, "pack", {_arr:[],_map:new Map()});
-                        else scope_new.vars[cc.op1.value.param_tail_list] = new compiler.expr(cc.op2.pos, "pack", {_arr:cc.op2.value._arr.slice(cc.op1.value.param.length),_map:new Map()});
+                    if(null != func.param_tail_list){
+                        if(cc.op2.value._arr.length < func.param.length)scope_new.vars[func.param_tail_list] = new compiler.expr(cc.op2.pos, "pack", {_arr:[],_map:new Map()});
+                        else scope_new.vars[func.param_tail_list] = new compiler.expr(cc.op2.pos, cc.root_scope.pack, {_arr:cc.op2.value._arr.slice(callee.value.param.length),_map:new Map()});
                     }
                     scope_new.vars.$this = cc.op1;
                     scope_new.vars.$args = cc.op2;
-                    scope_new.vars.$now = new compiler.expr([0,0], "block", fn_now);
+                    scope_new.vars.$now = new compiler.expr([0,0], cc.root_scope.block, fn_now);
                     scope_new.vars.$now.value.scope = scope_new;
-
                     cc.stack.push({op:"call", expr:expr, scope:cc.scope});
-                    expr = cc.op1.value.expr;
+                    expr = func.expr;
                     cc.op1 = null;
                     cc.op2 = null;
                     cc.scope = scope_new;
@@ -902,32 +1032,32 @@ module.exports = {
             else{
                 // value type. default binding capture
                 let param = null;
-                if("pack" == cc.op2.type){
+                if(cc.root_scope.pack == cc.op2.type){
                     if(cc.op2.value._arr.length > 0)param = cc.op2.value._arr[0];
                 }
                 else param = cc.op2;
 
                 if(null != param){
-                    if("string" == cc.op1.type){
-                        if("index" != param.type || "number" != typeof(param.value))cc.op1 = new compiler.expr(cc.op1.pos, "error", 0x202); // a string can only accept an int-type index.
-                        else if(expr.value < 0 || expr.value >= expr.length)cc.op1 = new compiler.expr(cc.op1.pos, "error", 0x203);  // the index exceeds string index range.
-                        else cc.op1 = new compiler.expr(cc.op1.pos, "int", cc.op1.value.codePointAt(param.value));
+                    if(cc.root_scope.string == callee.type){
+                        if(cc.root_scope.index != param.type || "number" != typeof(param.value))cc.op1 = new compiler.expr(callee.pos, cc.root_scope.error, 0x202); // a string can only accept an int-type index.
+                        else if(expr.value < 0 || expr.value >= callee.value.length)cc.op1 = new compiler.expr(callee.pos, cc.root_scope.error, 0x203);  // the index exceeds string index range.
+                        else cc.op1 = new compiler.expr(callee.pos, cc.root_scope.int, callee.value.codePointAt(param.value));
                     }
-                    else if("pack" == cc.op1.type){
-                        if("index" != param.type && "string" != param.type && "int" != param.type)cc.op1 = new compiler.expr(cc.op1.pos, "error", 0x204); // a pack can only accept an integer, a string or an index.
+                    else if(cc.root_scope.pack == callee.type){
+                        if(cc.root_scope.index != param.type && cc.root_scope.string != param.type && cc.root_scope.int != param.type)cc.op1 = new compiler.expr(callee.pos, cc.root_scope.error, 0x204); // a pack can only accept an integer, a string or an index.
                         else{
                             if("number" == typeof(param.value)){
-                                if(param.value < 0 || param.value >= cc.op1.value._arr.length)cc.op1 = new compiler.expr(cc.op1.pos, "error", 0x205);  // the index exceeds pack index range.
-                                else cc.op1 = cc.op1.value._arr[param.value];
+                                if(param.value < 0 || param.value >= callee.value._arr.length)cc.op1 = new compiler.expr(callee.pos, cc.root_scope.error, 0x205);  // the index exceeds pack index range.
+                                else cc.op1 = callee.value._arr[param.value];
                             }
                             else{
-                                if(cc.op1.value._map.has(param.value))cc.op1 = cc.op1.value._map.get(param.value);
-                                else cc.op1 = new compiler.expr(cc.op1.pos, "error", 0x206);  // the required element is not found.
+                                if(callee.value._map.has(param.value))cc.op1 = callee.value._map.get(param.value);
+                                else cc.op1 = new compiler.expr(callee.pos, cc.root_scope.error, 0x206);  // the required element is not found.
                             }
                         }
                     }
                     else{
-                        cc.op1 = new compiler.expr(cc.op1.pos, "error", 0x207); // a constant cannot accept any parameter.
+                        cc.op1 = new compiler.expr(callee.pos, cc.root_scope.error, 0x207); // a constant cannot accept any parameter.
                     }
                 }
                 cc.op2 = null;
@@ -1016,7 +1146,7 @@ module.exports = {
                 else if("call_gen" == stack_frame.op){
                     let result = stack_frame.op1.next(cc.op1);
                     if(result.done){
-                        cc.op2 = cc.op1;
+                        cc.op2 = result.value;
                         cc.op1 = null;
                         cc.expr = stack_frame.expr;
                         expr = null;
@@ -1055,11 +1185,11 @@ module.exports = {
             else{
                 if("block" == expr.type){
                     // add scope info
-                    cc.op2 = new this.expr(expr.pos, expr.type);
+                    cc.op2 = new this.expr(expr.pos, cc.root_scope.block);
                     cc.op2.value = {param:expr.value.param, param_tail_list:expr.value.param_tail_list, expr:expr.value.expr, scope:cc.scope};
                 }
                 else if("pack" == expr.type){
-                    cc.op2 = new this.expr(expr.pos, expr.type);
+                    cc.op2 = new this.expr(expr.pos, cc.root_scope.pack);
                     cc.op2.value = {_arr:[], _map:new Map()};
                     call_pack(expr);
                     continue;
@@ -1073,6 +1203,7 @@ module.exports = {
                 }
                 else{
                     cc.op2 = new this.expr(expr.pos, expr.type, expr.value);
+                    if("string" == typeof(cc.op2.type))cc.op2.type = cc.root_scope[cc.op2.type];
                 }
             }
 
