@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <title>Language Test</title>
+    <style type="text/css">
+        *{
+            font-family: "Arial", sans-serif;
+        }
+        body {
+            display: flex;
+            flex-direction: column;
+        
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            margin: 0;
+        }
+        nav {
+            box-shadow: 0px 2px 4px rgba(0,0,0,0.2);
+
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+        }
+        #wf_NavBarMain {
+            background-color: #808080;
+
+            display: flex;
+            flex-direction: row;
+            height: 80px;
+
+            color: #F8F8F8;
+
+            -webkit-user-select: none;
+            user-select: none;
+            cursor: default;
+        }
+        #wf_NavBarMain>.wf_Title {
+            align-self: center;
+            margin: 0px 10px 0px 20px;
+            
+            font-size: 40px;
+            font-family: Georgia, serif;
+        }
+        .wf_NavBarList{
+            display: flex;
+            justify-content: flex-end;
+            flex-grow: 1;
+            margin: 0;
+            padding: 0;
+
+            -webkit-app-region: no-drag;
+        }
+        .wf_NavBarList li{
+            padding: 0px 10px 0px 10px;
+            list-style: none;
+
+            line-height: 80px;
+            font-size: 15px;
+
+            cursor: pointer;
+            transition: 0.2s ease-out;
+        }
+        .wf_NavBarList li:hover{
+            background-color: #606060;
+            color: #C0C0C0;
+            transition: 0.2s ease-out;
+        }
+        .wf_NavBarList li:active{
+            background-color: #404040;
+            color: #F8F8F8;
+            box-shadow: 1px 0px 2px rgba(0,0,0,0.2) inset;
+            transition: 0.1s ease-out;
+        }
+        article {
+            background-color: #E0E0E0;
+
+            flex-grow: 1;
+            display: flex;
+            flex-direction: row;
+            justify-content: space-around;
+            overflow: hidden;
+        }
+        textarea {
+            background-color: #FFFFFF;
+            border-radius: 6px;
+            border:2px solid transparent;
+            box-shadow: 0px 1px 4px rgba(0,0,0,0.2) inset;
+
+            margin: 8px 6px;
+            padding: 5px 12px;
+            flex-grow: 1;
+
+            font-family: monospace;
+            color: #808080;
+            text-align: left;
+            vertical-align: middle;
+
+            -webkit-user-modify: read-write-plaintext-only;
+            outline: none;
+            resize: none;
+            overflow: auto;
+
+            transition: 0.2s ease-out;
+        }
+        textarea:hover{
+            border-color: #F0F0F0;
+            color: #202020;
+            transition: 0.2s ease-out;
+        }
+        textarea:focus{
+            color: #000000;
+            transition: 0.1s ease-out;
+        }
+        footer {
+            background-color: #808080;
+
+            justify-content: flex-end;
+            display: flex;
+            flex-direction: row;
+            justify-content: space-around;
+            height: 20px;
+            padding: 4px 10px 4px 20px;
+
+            color: #F8F8F8;
+            text-align: left;
+            vertical-align: middle;
+            line-height: 20px;
+            font-size: 15px;
+            font-family: Georgia, serif;
+
+            -webkit-user-select: none;
+            user-select: none;
+            cursor: default;
+        }
+    </style>
+    <script>var module = {};</script>
+    <script src="WarpCompiler.js"></script>
+  </head>
+  <body>
+    <nav>
+        <div id="wf_NavBarMain">
+            <div class="wf_Title">Language Test</div>
+            <ul class="wf_NavBarList">
+                <li id="Btn_Run" onclick="Run();">Run</li>
+            </ul>
+        </div>
+    </nav>
+    <article>
+        <textarea wrap="off" spellcheck="false" id="src">{x:x}->"Hello world!"</textarea>
+        <textarea wrap="off" spellcheck="false" id="result"></textarea>
+    </article>
+    <footer><div>Source</div><div>Result</div></footer>
+    <script>
+        function Run(){
+            let input = document.getElementById("src").value;
+            let parseResult;
+            try{
+                parseResult = module.exports.parse(input);
+            }
+            catch(e){
+                console.log(e);
+            }
+
+            if(0 == parseResult.id){
+                let evalResult = module.exports.eval(parseResult.value);
+                document.getElementById("result").value = module.exports.toString(evalResult);
+            }
+            else{
+                document.getElementById("result").value = module.exports.err_to_string(parseResult);
+            }
+        }
+    </script>
+  </body>
+</html>

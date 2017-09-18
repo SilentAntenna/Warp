@@ -12,7 +12,7 @@ module.exports = {
         "$now" : true,
         "$this" : true,
         "$args" : true,
-        "$proto" : true,
+        "$proto" : true
     },
     parsers: {
         main: {
@@ -385,7 +385,7 @@ module.exports = {
                     switch(stat.op){
                         case "eb": // element begin
                         if(null == lexeme){
-                            error = {id:0x100, pos:[file_stat.line, file_stat.column]}; // empty expression.
+                            error = {id:0x100, pos:[file_stat.line, file_stat.column]};
                         }
                         else if("" == lexeme.type){
                             if("(" == lexeme.content){
@@ -401,7 +401,7 @@ module.exports = {
                                 stat.op = "ib"; // index begin
                             }
                             else{
-                                error = {id:0x101, pos:lexeme.pos, value:lexeme.content}; // cannot start an element with {lexeme.content}.
+                                error = {id:0x101, pos:lexeme.pos, value:lexeme.content};
                             }
                         }
                         else{
@@ -413,7 +413,7 @@ module.exports = {
                         case "ee": // element end
                         if(null == lexeme){
                             if(stack.length > 0 && stack[stack.length - 1].op_stack == "mexp")expand_shortbind();
-                            if(stack.length > 0)error = {id:0x10F, pos:[file_stat.line, file_stat.column]}; // unclosed bracket.
+                            if(stack.length > 0)error = {id:0x10F, pos:[file_stat.line, file_stat.column]};
                             else error = {id:0x0, pos:[file_stat.line, file_stat.column], value:stat.head_item}; // done.
                         }
                         else if("" == lexeme.type){
@@ -446,12 +446,12 @@ module.exports = {
                             }
                             else if("," == lexeme.content){
                                 if(stack.length > 0 && stack[stack.length - 1].op_stack == "mexp")expand_shortbind();
-                                if(0 == stack.length || stack[stack.length - 1].op_stack != "pack")error = {id:0x10B, pos:lexeme.pos}; // unexpected comma.
+                                if(0 == stack.length || stack[stack.length - 1].op_stack != "pack")error = {id:0x10B, pos:lexeme.pos};
                                 else popstack();
                             }
                             else if(")" == lexeme.content){
                                 if(stack.length > 0 && stack[stack.length - 1].op_stack == "mexp")expand_shortbind();
-                                if(0 == stack.length || stack[stack.length - 1].op_stack != "pack")error = {id:0x109, pos:lexeme.pos, value:lexeme.content}; // unexpected bracket.
+                                if(0 == stack.length || stack[stack.length - 1].op_stack != "pack")error = {id:0x109, pos:lexeme.pos, value:lexeme.content};
                                 else{
                                     popstack();
                                     stat.lexeme_stack.push(lexeme);
@@ -459,12 +459,12 @@ module.exports = {
                             }
                             else if("}" == lexeme.content){
                                 if(stack.length > 0 && stack[stack.length - 1].op_stack == "mexp")expand_shortbind();
-                                if(0 == stack.length || stack[stack.length - 1].op_stack != "block")error = {id:0x109, pos:lexeme.pos, value:lexeme.content}; // unexpected bracket.
+                                if(0 == stack.length || stack[stack.length - 1].op_stack != "block")error = {id:0x109, pos:lexeme.pos, value:lexeme.content};
                                 else popstack();
                             }
                             else if("->" == lexeme.content){
                                 if(stack.length > 0 && stack[stack.length - 1].op_stack == "mexp")expand_shortbind();
-                                if("dir" in stat && stat.dir != true)error = {id:0x102, pos:lexeme.pos}; // the binding direction must be the same in an expression.
+                                if("dir" in stat && stat.dir != true)error = {id:0x102, pos:lexeme.pos};
                                 else{
                                     stat.dir = true;
                                     stat.op = "eb"; // element begin
@@ -472,24 +472,24 @@ module.exports = {
                             }
                             else if("<-" == lexeme.content){
                                 if(stack.length > 0 && stack[stack.length - 1].op_stack == "mexp")expand_shortbind();
-                                if("dir" in stat && stat.dir != false)error = {id:0x102, pos:lexeme.pos}; // the binding direction must be the same in an expression.
+                                if("dir" in stat && stat.dir != false)error = {id:0x102, pos:lexeme.pos};
                                 else{
                                     stat.dir = false;
                                     stat.op = "eb"; // element begin
                                 }
                             }
                             else{
-                                error = {id:0x103, pos:lexeme.pos, value:lexeme.content}; // cannot have {lexeme.content} after an constant.
+                                error = {id:0x103, pos:lexeme.pos, value:lexeme.content};
                             }
                         }
                         else {
-                            error = {id:0x104, pos:lexeme.pos}; // a constant cannot appear right after another one.
+                            error = {id:0x104, pos:lexeme.pos};
                         }
                         break;
 
                         case "bcb": // block capture definition begin
                         if(null == lexeme){
-                            error = {id:0x105, pos:[file_stat.line, file_stat.column]}; // unexpected file end.
+                            error = {id:0x105, pos:[file_stat.line, file_stat.column]};
                         }
                         else if("" == lexeme.type){
                             if(":" == lexeme.content){
@@ -498,24 +498,24 @@ module.exports = {
                                 pushstack();
                             }
                             else{
-                                error = {id:0x107, pos:lexeme.pos, value:lexeme.content}; // a binding capture definition can only contain symbols separated by commas.
+                                error = {id:0x107, pos:lexeme.pos, value:lexeme.content};
                             }
                         }
                         else if("symbol" == lexeme.type){
-                            if(lexeme.content in compiler.reserved_word)error = {id:0x110, pos:lexeme.pos, value:lexeme.content}; // try to redefine a keyword.
+                            if(lexeme.content in compiler.reserved_word)error = {id:0x10A, pos:lexeme.pos, value:lexeme.content};
                             else{
                                 stat.cur_item.value.param.push(lexeme.content);
                                 stat.op = "bce?"; // block capture definition possible end
                             }
                         }
                         else{
-                            error = {id:0x106, pos:lexeme.pos}; // a binding capture definition only accept symbols.
+                            error = {id:0x106, pos:lexeme.pos};
                         }
                         break;
 
                         case "bce?": // block capture definition possible end
                         if(null == lexeme){
-                            error = {id:0x105, pos:[file_stat.line, file_stat.column]}; // unexpected file end.
+                            error = {id:0x105, pos:[file_stat.line, file_stat.column]};
                         }
                         else if("" == lexeme.type){
                             if("," == lexeme.content){
@@ -531,17 +531,17 @@ module.exports = {
                                 pushstack();
                             }
                             else{
-                                error = {id:0x107, pos:lexeme.pos, value:lexeme.content}; // a binding capture definition can only contain symbols separated by commas.
+                                error = {id:0x107, pos:lexeme.pos, value:lexeme.content};
                             }
                         }
                         else{
-                            error = {id:0x107, pos:lexeme.pos}; // a binding capture definition can only contain symbols separated by commas.
+                            error = {id:0x107, pos:lexeme.pos};
                         }
                         break;
 
                         case "bce": // block capture definition possible end
                         if(null == lexeme){
-                            error = {id:0x105, pos:[file_stat.line, file_stat.column]}; // unexpected file end.
+                            error = {id:0x105, pos:[file_stat.line, file_stat.column]};
                         }
                         else if("" == lexeme.type){
                             if(":" == lexeme.content){
@@ -550,17 +550,17 @@ module.exports = {
                                 pushstack();
                             }
                             else{
-                                error = {id:0x108, pos:lexeme.pos}; // a binding capture definition must end after "..." .
+                                error = {id:0x108, pos:lexeme.pos};
                             }
                         }
                         else{
-                            error = {id:0x108, pos:lexeme.pos}; // a binding capture definition must end after "..." .
+                            error = {id:0x108, pos:lexeme.pos};
                         }
                         break;
 
                         case "pb": // pack begin
                         if(null == lexeme){
-                            error = {id:0x105, pos:[file_stat.line, file_stat.column]}; // unexpected file end.
+                            error = {id:0x105, pos:[file_stat.line, file_stat.column]};
                         }
                         else if("" == lexeme.type){
                             if(")" == lexeme.content){
@@ -578,13 +578,13 @@ module.exports = {
                             if(stat.lexeme_stack.length > 0)lexeme_next = stat.lexeme_stack.pop();
                             else lexeme_next = this.lexer.get_next(file_stat);
                             if(null == lexeme){
-                                error = {id:0x105, pos:[file_stat.line, file_stat.column]}; // unexpected file end.
+                                error = {id:0x105, pos:[file_stat.line, file_stat.column]};
                             }
                             else if("error" == lexeme_next.type){
                                 error = {id:lexeme_next.content, pos:lexeme_next.pos};
                             }
                             else if("" == lexeme_next.type && ":" == lexeme_next.content){
-                                if(lexeme.content in compiler.reserved_word)error = {id:0x10A, pos:lexeme.pos, value:lexeme.content}; // try to redefine a keyword.
+                                if(lexeme.content in compiler.reserved_word)error = {id:0x10A, pos:lexeme.pos, value:lexeme.content};
                                 else{
                                     stat.op = "pb"; // pack begin
                                     stat.op_stack = "pack";
@@ -610,7 +610,7 @@ module.exports = {
 
                         case "ib": // index begin
                         if(null == lexeme){
-                            error = {id:0x105, pos:[file_stat.line, file_stat.column]}; // unexpected file end.
+                            error = {id:0x105, pos:[file_stat.line, file_stat.column]};
                         }
                         else if("symbol" == lexeme.type){
                             stat.cur_item.value = lexeme.content;
@@ -621,37 +621,37 @@ module.exports = {
                             stat.op = "ie"; // index end
                         }
                         else{
-                            error = {id:0x10C, pos:lexeme.pos}; // an index must be expressed with an integer or a symbol.
+                            error = {id:0x10C, pos:lexeme.pos};
                         }
                         break;
 
                         case "ib_dot": // index begin
                         if(null == lexeme){
-                            error = {id:0x105, pos:[file_stat.line, file_stat.column]}; // unexpected file end.
+                            error = {id:0x105, pos:[file_stat.line, file_stat.column]};
                         }
                         else if("symbol" == lexeme.type){
                             stat.cur_item.value = lexeme.content;
                             stat.op = "ee"; // index end
                         }
                         else{
-                            error = {id:0x10E, pos:lexeme.pos}; // an dot-form index can only be a symbol index.
+                            error = {id:0x10E, pos:lexeme.pos};
                         }
                         break;
 
                         case "ie": // index end
                         if(null == lexeme){
-                            error = {id:0x105, pos:[file_stat.line, file_stat.column]}; // unexpected file end.
+                            error = {id:0x105, pos:[file_stat.line, file_stat.column]};
                         }
                         else if("" == lexeme.type){
                             if("]" == lexeme.content){
                                 stat.op = "ee"; // element end
                             }
                             else{
-                                error = {id:0x10D, pos:lexeme.pos}; // an index must end with a "]".
+                                error = {id:0x10D, pos:lexeme.pos};
                             }
                         }
                         else{
-                            error = {id:0x10D, pos:lexeme.pos}; // an index must end with a "]".
+                            error = {id:0x10D, pos:lexeme.pos};
                         }
                         break;
                     }
@@ -670,11 +670,43 @@ module.exports = {
         };
         return this.parsers.main.parse(file_stat, this);
     },
+    err_to_string: function(err){
+        let result = "";
+        if(err.id && 0 == err.id)result = "Done."
+        else if(err.constructor != this.expr){
+            if(err.id > 0x100)result = "Parser error"; else result = "Lexer error"; 
+            result += ` 0x${err.id.toString(16).toUpperCase()}[${err.pos[0] + 1},${err.pos[1] + 1}]: `;
+            switch(err.id){
+                case 0x1: result += "Illigal char literal."; break;
+                case 0x2: result += "Illigal string literal."; break;
+                case 0x3: result += "Illigal escape character."; break;
+                case 0x100: result += "Empty expression."; break;
+                case 0x101: result += `Cannot start an element with \"${err.value}\".`; break;
+                case 0x102: result += "The binding direction must be the same in an expression."; break;
+                case 0x103: result += `Cannot have \"${err.value}\" after an constant.`; break;
+                case 0x104: result += "A constant cannot appear right after another one."; break;
+                case 0x105: result += "Unexpected end of the source."; break;
+                case 0x106: result += "A binding capture definition only accept symbols."; break;
+                case 0x107: result += "A binding capture definition can only contain symbols separated by commas."; break;
+                case 0x108: result += "A binding capture definition must end after \"...\"."; break;
+                case 0x109: result += `Unexpected bracket \"${err.value}\".`; break;
+                case 0x10A: result += `Trying to redefine reserved keyword \"${err.value}\".`; break;
+                case 0x10B: result += "Unexpected comma."; break;
+                case 0x10C: result += "An index must be expressed with either an integer or a symbol."; break;
+                case 0x10D: result += "An index must end with a \"]\""; break;
+                case 0x10E: result += "A dot-form index can only be a symbol index."; break;
+                case 0x10F: result += "Unclosed bracket found."; break;
+                default: break;
+            }
+        }
+        else result = "Runtime error.";
+        return result;
+    },
     toString: function(expr, mexp = false){
         let result = "";
         while(true){
             if(expr.type == "error" || (expr.type.value && expr.type.value.fn === this.global_fn.error.fn)){
-                result += `${expr.value}@[${expr.pos[0]},${expr.pos[1]}]`;
+                result += `error\{0x${expr.value.toString(16).toUpperCase()}@[${expr.pos[0]+1},${expr.pos[1]+1}]\}`;
             }
             else if(expr.type == "index" || (expr.type.value && expr.type.value.fn === this.global_fn.index.fn)){
                 result += "[" + expr.value.toString() + "]";
@@ -720,12 +752,29 @@ module.exports = {
                 }
                 result += ")";
             }
+            else if(expr.type == "type" || (expr.type.value && expr.type.value.fn === this.global_fn.type.fn)){
+                if("name" in expr.value)result += expr.value.name;
+                else{
+                    result += "type(proto:";
+                    result += this.toString(expr.value.proto);
+                    result += ",";
+                    result += this.toString(expr.value.expr);
+                    result += ")";
+                }
+            }
+            else if(expr.type == "float" || (expr.type.value && expr.type.value.fn === this.global_fn.float.fn)){
+                result += expr.value.toExponential();
+            }
             else if(expr.type == "string" || (expr.type.value && expr.type.value.fn == this.global_fn.string.fn)){
-                result += "\"" + expr.value.toString().replace("\"","\"") + "\"";
+                let tmpstr = expr.value.replace("\"","\\\"");
+                tmpstr = tmpstr.replace("\b","\\b");
+                result += "\"" + tmpstr + "\"";
             }
-            else{
-                result += expr.value.toString();
+            else if(expr.type.value && !("name" in expr.type.value)){
+                result += "custom_type{...}"
             }
+            else result += expr.value.toString();
+
             if(null != expr.binding){
                 expr = expr.binding;
                 if(!mexp)result += "->";
@@ -792,7 +841,7 @@ module.exports = {
             fn: function(expr){
                 let def_convert = this.env._def_type_convert.apply(this, [this.root_scope.pack, expr]);
                 if(null != def_convert)return def_convert;
-                else return new this.env.expr([0,0], this.root_scope.error, 0x208); // operation failed.
+                else return new this.env.expr([0,0], this.root_scope.pack, {_arr:[expr],_map:new Map()}); // operation failed.
             },
             proto: "block"
         },
@@ -826,6 +875,12 @@ module.exports = {
             fn: function(expr){
                 let def_convert = this.env._def_type_convert.apply(this, [this.root_scope.bool, expr]);
                 if(null != def_convert)return def_convert;
+                else if(this.root_scope.int == expr.type)return new this.env.expr([0,0], this.root_scope.bool, expr.value != 0);
+                else if(this.root_scope.string == expr.type){
+                    if("true" == expr.value)return new this.env.expr([0,0], this.root_scope.bool, true);
+                    else if("false" == expr.value)return new this.env.expr([0,0], this.root_scope.bool, false);
+                    else return new this.env.expr([0,0], this.root_scope.error, 0x208); // operation failed.
+                }
                 else return new this.env.expr([0,0], this.root_scope.error, 0x208); // operation failed.
             },
             proto: "block"
@@ -842,7 +897,12 @@ module.exports = {
             fn: function(expr){
                 let def_convert = this.env._def_type_convert.apply(this, [this.root_scope.index, expr]);
                 if(null != def_convert)return def_convert;
-                else if(this.root_scope.int == expr.type) return new this.env.expr([0,0], this.root_scope.index, expr.value);
+                else if(this.root_scope.int == expr.type)return new this.env.expr([0,0], this.root_scope.index, expr.value);
+                else if(this.root_scope.string == expr.type){
+                    let result = /^[^\d\{\}\[\]\(\)'":,\.\+\-\*\/\=<>%\s][^\{\}\[\]\(\)'":,\.\+\-\*\/\=<>%\s]*$/.test(expr.value);
+                    if(result)return new this.env.expr([0,0], this.root_scope.index, expr.value);
+                    else return new this.env.expr([0,0], this.root_scope.error, 0x208); // operation failed.
+                }
                 else return new this.env.expr([0,0], this.root_scope.error, 0x208); // operation failed.
             },
             proto: "block"

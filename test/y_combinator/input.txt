@@ -1,0 +1,11 @@
+{h:
+  {x: {g: {y: h->(g->g, y)}} -> {g: {y: h->(g->g, y)}} -> x}	% y combinator
+}
+->{this, x:	% factorial
+  if(=(1,x),
+    then:1,
+    else:{:
+      *(x,this(-(x,1)))
+    }
+  )
+}->5

@@ -67,7 +67,7 @@ app.on('ready', async () => {
                 }
             }
             else{
-                let error = `${parseResult.id}@[${parseResult.pos[0]},${parseResult.pos[1]}]${":" + parseResult.value}`;
+                let error = `error\{0x${parseResult.id.toString(16).toUpperCase()}@[${parseResult.pos[0]+1},${parseResult.pos[1]+1}]${":" + parseResult.value}\}`;
                 try{
                     let error_ref = fs.readFileSync(TestDirPath + "\\" + Path_CurDir + "\\" + "error.txt", "UTF-8");
                     if(error_ref !=error){

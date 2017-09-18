@@ -1,0 +1,5 @@
+(
+ is(typeof(1), int),
+ is(typeof(1), block),
+ is(typeof(""), typeof(1))
+)

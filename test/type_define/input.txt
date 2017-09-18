@@ -1,0 +1,16 @@
+(new_type: type(
+  proto:int,
+  {i: % constructor params
+    {val:(
+	    {index: % params
+	       if(=(index,[1]), then:val, else:val->$args)
+	    }
+	    ,val
+	  )
+	}->$proto(i)
+  }
+))<-{:
+  (new_type->"1"->[1],
+   new_type->1->[2],
+   int(new_type->2))
+}
